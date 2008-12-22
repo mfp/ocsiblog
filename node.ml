@@ -45,7 +45,7 @@ object(self)
 
   method href h =
     let uri = h.Simple_markup.href_target in
-      if is_inner_link uri then {< deps = S.add uri deps >} 
+      if is_inner_link uri then {< deps = S.add uri deps >}
       else match parse_relative_url uri with
           Some (page, _) -> {< deps = S.add page deps >}
         | None -> self
@@ -61,7 +61,7 @@ let (@@) f x = f x
 let set_keys s = S.fold (fun k l -> k :: l) s []
 
 let find_deps ps =
-  let s = 
+  let s =
     (List.fold_left (fun o par -> o#paragraph par) (new depfinder) ps)#deps
   in set_keys s
 
@@ -90,11 +90,11 @@ let title e = e.title
 let tags e = e.tags
 let deps e = Lazy.force e.deps
 
-let signal_deps_changed e = 
+let signal_deps_changed e =
   e.html <- None
 
 let get_html f e = match e.html with
-    None -> 
+    None ->
       let html = f e.markup in
         e.html <- Some html;
         html
@@ -102,7 +102,7 @@ let get_html f e = match e.html with
 
 let compare ?secondary crit =
   Catalog.compare_by_criteria
-    (function 
+    (function
          `Date -> (fun x y -> compare x.date y.date)
        | `Title -> (fun x y -> compare x.title y.title))
     ?extra:secondary crit

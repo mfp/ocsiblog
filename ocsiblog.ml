@@ -16,7 +16,7 @@ let toplevel_pages = ref 10
 let pages = Pages.make !pagedir
 
 let not_found () =
-  raise (Ocsigen_extensions.Ocsigen_http_error 
+  raise (Ocsigen_extensions.Ocsigen_http_error
            (Ocsigen_http_frame.Cookies.empty, 404))
 
 let attachment_file page basename =
@@ -42,7 +42,7 @@ let rec render_link sp href =
     end else
       try
         let url = Neturl.parse_url uri in
-          XHTML.M.a 
+          XHTML.M.a
             ~a:[a_href (uri_of_string (Neturl.string_of_url url))] [desc]
       with Neturl.Malformed_URL -> (* a relative URL, basic verification *)
         match String.nsplit uri "/" with
@@ -50,7 +50,7 @@ let rec render_link sp href =
               a ~service:(Lazy.force attachment_service) ~sp [desc] (page, file)
           | _ -> (* broken relative link *) desc
 
-and render_img sp img = 
+and render_img sp img =
   XHTML.M.img ~src:(uri_of_string img.SM.img_src) ~alt:img.SM.img_alt ()
 
 and render_node sp =
@@ -59,13 +59,13 @@ and render_node sp =
     ~render_link:(render_link sp)
     ~render_img:(render_img sp)
 
-and page_service = lazy begin 
+and page_service = lazy begin
   register_new_service
     ~path:[""]
     ~get_params:(suffix (string "page"))
     (fun sp page () -> match Pages.get_entry pages page with
          None -> not_found ()
-       | Some node -> 
+       | Some node ->
            let thetitle = Node.title node in
            let body_html = Node.get_html (render_node sp) node in
              page_with_title thetitle ((h1 [pcdata thetitle]) :: body_html))
@@ -75,9 +75,9 @@ and attachment_service = lazy begin
   Eliom_predefmod.Files.register_new_service
     ~path:[""]
     ~get_params:(suffix (string "page" ** string "file"))
-    (fun sp (page, file) () -> 
+    (fun sp (page, file) () ->
        if not (Pages.has_entry pages page) then not_found ()
-       else 
+       else
          match String.nsplit file "/" with
              [basename] -> return (attachment_file page file)
            | _ -> not_found ())
@@ -85,10 +85,10 @@ end
 
 and entry_div sp node =
   div [
-    h2 ~a:[a_class ["entry_title"]] 
+    h2 ~a:[a_class ["entry_title"]]
       [span ~a:[a_class ["date"]] [pcdata (format_date (Node.date node))];
        pcdata " ";
-       span ~a:[a_class ["title"]] 
+       span ~a:[a_class ["title"]]
          [a ~service:(Lazy.force page_service) ~sp
             [pcdata (Node.title node)] (Node.name node)]];
 
@@ -101,22 +101,22 @@ and toplevel_service = lazy begin
     ~get_params:unit
     (fun sp () () ->
        let all = Pages.sorted_entries ~reverse:true `Date pages in
-       let pages = List.take !toplevel_pages (List.filter Node.syndicated all) 
-       in page_with_title 
+       let pages = List.take !toplevel_pages (List.filter Node.syndicated all)
+       in page_with_title
             !toplevel_title
             [div ~a:[a_class ["entries"]]
                (List.map (entry_div sp) pages)])
 end
 
 let rec reload_pages () =
-  printf "[%s] reloading pages\n%!" 
+  printf "[%s] reloading pages\n%!"
     (Netdate.mk_mail_date (Unix.gettimeofday ()));
   Pages.refresh pages;
   Lwt_unix.sleep 10. >>= fun () -> reload_pages ()
 
 let init x = ignore (Lazy.force x)
 
-let () = 
+let () =
   Eliom_services.register_eliom_module "ocsiblog"
     (fun () -> init page_service;
                init attachment_service;
