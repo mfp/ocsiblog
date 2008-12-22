@@ -23,6 +23,8 @@ let pages = Pages.make !pagedir
 
 let not_found () = raise Eliom_common.Eliom_404
 
+let force = Lazy.force
+
 let attachment_file page basename =
   String.join "/" [!pagedir; page ^ ".files"; basename]
 
@@ -41,34 +43,38 @@ let format_date t = Netdate.mk_mail_date t
 
 let render_pre _ ~kind txt = pre [pcdata txt]
 
-let absolute_service_link ~service ~sp desc params =
+let absolute_service_link service ~sp desc params =
   XHTML.M.a
-    ~a:[a_href (make_full_uri ~sp ~service:(Lazy.force service) params)]
+    ~a:[a_href (make_full_uri ~sp ~service:(force service) params)]
     desc
+
+let map_uri ~relative ~broken ~not_relative uri =
+  try
+    let url = Neturl.parse_url uri in
+      not_relative url
+  with Neturl.Malformed_URL -> (* a relative URL, basic verification *)
+    match String.nsplit uri "/" with
+        [ page; file ] when Pages.has_entry pages page ->
+          relative page file
+      | _ -> (* broken relative link *) broken uri
 
 let rec render_link_aux ~link_attachment ~link_page href =
   let uri = href.SM.href_target in
   let desc = pcdata href.SM.href_desc in
     if Node.is_inner_link uri then begin
-      if Pages.has_entry pages uri then
-        link_page [desc] uri
-      else
-        desc
+      if Pages.has_entry pages uri then link_page [desc] uri
+      else desc
     end else
-      try
-        let url = Neturl.parse_url uri in
-          XHTML.M.a
-            ~a:[a_href (uri_of_string (Neturl.string_of_url url))] [desc]
-      with Neturl.Malformed_URL -> (* a relative URL, basic verification *)
-        match String.nsplit uri "/" with
-            [ page; file ] when Pages.has_entry pages page ->
-              link_attachment [desc] (page, file)
-          | _ -> (* broken relative link *) desc
+      map_uri
+        ~not_relative:(fun _ -> XHTML.M.a ~a:[a_href (uri_of_string uri)] [desc])
+        ~relative:(fun page file -> link_attachment [desc] (page, file))
+        ~broken:(fun _ -> desc)
+        uri
 
 and render_link sp href =
   render_link_aux
-    ~link_page:(a ~service:(Lazy.force page_service) ~sp)
-    ~link_attachment:(a ~service:(Lazy.force attachment_service) ~sp)
+    ~link_page:(a ~service:(force page_service) ~sp)
+    ~link_attachment:(a ~service:(force attachment_service) ~sp)
     href
 
 and render_img sp img =
@@ -134,7 +140,7 @@ and rss2_service = lazy begin
          List.map
            (fun node ->
               let link =
-                make_full_string_uri ~sp ~service:(Lazy.force page_service)
+                make_full_string_uri ~sp ~service:(force page_service)
                   (Node.name node)
               in Rss.make_item ~title:(Node.title node) ~link
                 ~pubDate:(Node.date node) ~guid:(link, true)
@@ -165,7 +171,7 @@ and entry_div sp node =
 and entry_link sp node = li [ link_to_node sp node ]
 
 and link_to_node sp node =
-  a ~service:(Lazy.force page_service) ~sp
+  a ~service:(force page_service) ~sp
     [pcdata (Node.title node)] (Node.name node)
 
 and render_node_for_rss ~sp node =
@@ -174,22 +180,20 @@ and render_node_for_rss ~sp node =
       ~render_pre:(render_pre ())
       ~render_link:begin
         render_link_aux
-          ~link_attachment:(absolute_service_link ~service:attachment_service ~sp)
-          ~link_page:(absolute_service_link ~service:page_service ~sp)
+          ~link_attachment:(absolute_service_link attachment_service ~sp)
+          ~link_page:(absolute_service_link page_service ~sp)
       end
       ~render_img:begin fun img ->
         let uri = img.SM.img_src and alt = img.SM.img_alt in
-          try
-          let _ = Neturl.parse_url uri in
-            XHTML.M.img ~src:(uri_of_string uri) ~alt ()
-          with Neturl.Malformed_URL -> (* a relative URL, basic verification *)
-            match String.nsplit uri "/" with
-                [ page; file ] when Pages.has_entry pages page ->
-                  XHTML.M.img
-                    ~src:(make_full_uri ~sp ~service:(Lazy.force attachment_service)
-                            (page, file))
-                    ~alt ()
-             | _ -> pcdata alt
+          map_uri
+            ~not_relative:(fun _ -> XHTML.M.img ~src:(uri_of_string uri) ~alt ())
+            ~relative:(fun p f ->
+                         XHTML.M.img
+                           ~src:(make_full_uri ~sp
+                                   ~service:(force attachment_service) (p, f))
+                           ~alt ())
+            ~broken:(fun _ -> pcdata alt)
+            uri
       end
       (Node.markup node) in
   let b = Buffer.create 13 in
@@ -202,7 +206,7 @@ let rec reload_pages () =
   Pages.refresh pages;
   Lwt_unix.sleep !refresh_period >>= fun () -> reload_pages ()
 
-let init x = ignore (Lazy.force x)
+let init x = ignore (force x)
 
 let () =
   Eliom_services.register_eliom_module "ocsiblog"
