@@ -1,0 +1,55 @@
+USE_OCAMLFIND = true
+NATIVE_ENABLED = true
+BYTE_ENABLED = true
+
+CamlSources(mods) =
+    foreach(mod, $(mods))
+	$(addsuffixes .cmo .cmi .cmx .sig $(EXT_OBJ), $(mod)):
+
+%.sig: %.ml %.cmo
+    $(OCAMLFIND) $(OCAMLC) -package $(concat \,, $(OCAMLPACKS)) \
+	$(mapprefix -I, $(OCAMLINCLUDES)) \
+	$(OCAMLFLAGS) $(OCAMLCFLAGS) -i $< > $@
+
+
+OCAMLPACKS[] =
+   ocsigen.server
+   ocsigen.ext.ocsipersist-sqlite
+   ocsigen.ext.eliom
+   ocsigen.ext.staticmod
+   ocsigen.xhtml
+   extlib
+   str
+   lwt
+
+PP = -pp "camlp4o Camlp4FoldGenerator.cmo"
+OCAMLFLAGS += -thread -dtypes $(PP)
+OCAMLDEPFLAGS += $(PP)
+
+TESTS[] =
+   simple_markup
+   test_simple_markup
+
+section
+    OCAMLPACKS[] += oUnit
+    CamlSources(run_tests test_simple_markup)
+    OCamlProgram(run_tests, $(TESTS) run_tests)
+
+EXE_FILES[] =
+    simple_markup
+    simple_markup__html
+    catalog
+    node
+    ocsiblog
+    ocsiblog_main
+
+section
+    #OCAMLOPTFLAGS += -cclib -static -cclib -lcrypto
+    OCamlProgram(ocsiblog, $(EXE_FILES))
+
+.DEFAULT: run_tests ocsiblog$(EXE)
+
+.PHONY: clean
+clean:
+	rm -f $(filter-proper-targets $(ls R, .)) *.s *.annot
+
