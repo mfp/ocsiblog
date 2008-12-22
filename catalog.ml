@@ -1,4 +1,5 @@
 open ExtList
+open ExtString
 
 module type ENTRY =
 sig
@@ -69,6 +70,7 @@ struct
   let get_files basedir : entry_file list =
     List.filter_map
       (fun f ->
+         if String.starts_with f "." then None else
          let fname = basedir /^ f in
          let stat = Unix.stat fname in
            match stat.Unix.st_kind with
