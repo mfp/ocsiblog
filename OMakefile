@@ -40,6 +40,7 @@ EXE_FILES[] =
     simple_markup__html
     catalog
     node
+    rss
     ocsiblog
     ocsiblog_main
 

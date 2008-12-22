@@ -14,12 +14,14 @@ let toplevel_title = ref "eigenclass"
 let toplevel_pages = ref 5
 let toplevel_links = ref 10
 let refresh_period = ref 10.
+let rss_title = ref "eigenclass"
+let rss_link = ref "http://eigenclass.org"
+let rss_description = ref !rss_title
+let rss_nitems = ref 10
 
 let pages = Pages.make !pagedir
 
-let not_found () =
-  raise (Ocsigen_extensions.Ocsigen_http_error
-           (Ocsigen_http_frame.Cookies.empty, 404))
+let not_found () = raise Eliom_common.Eliom_404
 
 let attachment_file page basename =
   String.join "/" [!pagedir; page ^ ".files"; basename]
@@ -37,14 +39,19 @@ let maybe_ul ?a = function
 
 let format_date t = Netdate.mk_mail_date t
 
-let render_pre sp ~kind txt = pre [pcdata txt]
+let render_pre _ ~kind txt = pre [pcdata txt]
 
-let rec render_link sp href =
+let absolute_service_link ~service ~sp desc params =
+  XHTML.M.a
+    ~a:[a_href (make_full_uri ~sp ~service:(Lazy.force service) params)]
+    desc
+
+let rec render_link_aux ~link_attachment ~link_page href =
   let uri = href.SM.href_target in
   let desc = pcdata href.SM.href_desc in
     if Node.is_inner_link uri then begin
       if Pages.has_entry pages uri then
-        a ~service:(Lazy.force page_service) ~sp [desc] uri
+        link_page [desc] uri
       else
         desc
     end else
@@ -55,8 +62,14 @@ let rec render_link sp href =
       with Neturl.Malformed_URL -> (* a relative URL, basic verification *)
         match String.nsplit uri "/" with
             [ page; file ] when Pages.has_entry pages page ->
-              a ~service:(Lazy.force attachment_service) ~sp [desc] (page, file)
+              link_attachment [desc] (page, file)
           | _ -> (* broken relative link *) desc
+
+and render_link sp href =
+  render_link_aux
+    ~link_page:(a ~service:(Lazy.force page_service) ~sp)
+    ~link_attachment:(a ~service:(Lazy.force attachment_service) ~sp)
+    href
 
 and render_img sp img =
   XHTML.M.img ~src:(uri_of_string img.SM.img_src) ~alt:img.SM.img_alt ()
@@ -105,6 +118,41 @@ and toplevel_service = lazy begin
                [maybe_ul (List.map (entry_link sp) (List.take !toplevel_links all))]])
 end
 
+and rss2_service = lazy begin
+  Eliom_predefmod.Text.register_new_service
+    ~path:["rss2"]
+    ~get_params:(suffix (string "tags"))
+    (fun sp taglist () ->
+       let tags = String.nsplit taglist "," in
+       let all = Pages.sorted_entries ~reverse:true `Date pages in
+       let tags_match node =
+         tags = [] || List.exists (fun t -> List.mem t tags) (Node.tags node) in
+       let nodes =
+         List.take !rss_nitems
+           (List.filter (fun n -> Node.syndicated n && tags_match n) all) in
+       let items =
+         List.map
+           (fun node ->
+              let link =
+                make_full_string_uri ~sp ~service:(Lazy.force page_service)
+                  (Node.name node)
+              in Rss.make_item ~title:(Node.title node) ~link
+                ~pubDate:(Node.date node) ~guid:(link, true)
+                ~description:(render_node_for_rss ~sp node) ())
+           nodes in
+       let xml = Rss.make
+                   ~title:!rss_title
+                   ~link:!rss_link
+                   ~description:!rss_description
+                   ~ttl:180
+                   items in
+       let b = Buffer.create 256 in
+       let add = Buffer.add_string b in
+         XML.decl ~version:"1.0" ~encoding:"UTF-8" add ();
+         XML.output add xml;
+         return (Buffer.contents b, "text/xml"))
+end
+
 and entry_div sp node =
   div [
     h2 ~a:[a_class ["entry_title"]]
@@ -120,6 +168,34 @@ and link_to_node sp node =
   a ~service:(Lazy.force page_service) ~sp
     [pcdata (Node.title node)] (Node.name node)
 
+and render_node_for_rss ~sp node =
+  let html =
+    Simple_markup__html.to_html
+      ~render_pre:(render_pre ())
+      ~render_link:begin
+        render_link_aux
+          ~link_attachment:(absolute_service_link ~service:attachment_service ~sp)
+          ~link_page:(absolute_service_link ~service:page_service ~sp)
+      end
+      ~render_img:begin fun img ->
+        let uri = img.SM.img_src and alt = img.SM.img_alt in
+          try
+          let _ = Neturl.parse_url uri in
+            XHTML.M.img ~src:(uri_of_string uri) ~alt ()
+          with Neturl.Malformed_URL -> (* a relative URL, basic verification *)
+            match String.nsplit uri "/" with
+                [ page; file ] when Pages.has_entry pages page ->
+                  XHTML.M.img
+                    ~src:(make_full_uri ~sp ~service:(Lazy.force attachment_service)
+                            (page, file))
+                    ~alt ()
+             | _ -> pcdata alt
+      end
+      (Node.markup node) in
+  let b = Buffer.create 13 in
+    List.iter (XML.output (Buffer.add_string b)) (XHTML.M.toeltl html);
+    Buffer.contents b
+
 let rec reload_pages () =
   printf "[%s] reloading pages\n%!"
     (Netdate.mk_mail_date (Unix.gettimeofday ()));
@@ -133,4 +209,5 @@ let () =
     (fun () -> init page_service;
                init attachment_service;
                init toplevel_service;
+               init rss2_service;
                ignore (reload_pages ()))
