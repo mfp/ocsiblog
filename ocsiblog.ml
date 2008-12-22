@@ -11,7 +11,8 @@ module SM = Simple_markup
 
 let pagedir = ref "pages"
 let toplevel_title = ref "eigenclass"
-let toplevel_pages = ref 10
+let toplevel_pages = ref 5
+let toplevel_links = ref 10
 
 let pages = Pages.make !pagedir
 
@@ -26,6 +27,12 @@ let page_with_title thetitle thebody =
   return (html
             (head (title (pcdata thetitle)) [])
             (body thebody))
+
+let div_with_class klass ?(a = []) l = div ~a:(a_class [klass] :: a) l
+
+let maybe_ul ?a = function
+    [] -> pcdata ""
+  | hd::tl -> ul ?a hd tl
 
 let format_date t = Netdate.mk_mail_date t
 
@@ -83,18 +90,6 @@ and attachment_service = lazy begin
            | _ -> not_found ())
 end
 
-and entry_div sp node =
-  div [
-    h2 ~a:[a_class ["entry_title"]]
-      [span ~a:[a_class ["date"]] [pcdata (format_date (Node.date node))];
-       pcdata " ";
-       span ~a:[a_class ["title"]]
-         [a ~service:(Lazy.force page_service) ~sp
-            [pcdata (Node.title node)] (Node.name node)]];
-
-    div ~a:[a_class ["entry_body"]]
-      (Node.get_html (render_node sp) node)]
-
 and toplevel_service = lazy begin
   register_new_service
     ~path:[""]
@@ -104,9 +99,26 @@ and toplevel_service = lazy begin
        let pages = List.take !toplevel_pages (List.filter Node.syndicated all)
        in page_with_title
             !toplevel_title
-            [div ~a:[a_class ["entries"]]
-               (List.map (entry_div sp) pages)])
+            [div ~a:[a_class ["entries"]] (List.map (entry_div sp) pages);
+             div ~a:[a_class ["sidebar"]]
+               [maybe_ul (List.map (entry_link sp) (List.take !toplevel_links all))]])
 end
+
+and entry_div sp node =
+  div [
+    h2 ~a:[a_class ["entry_title"]]
+      [span ~a:[a_class ["date"]] [pcdata (format_date (Node.date node))];
+       pcdata " ";
+       span ~a:[a_class ["title"]] [link_to_node sp node]];
+
+    div ~a:[a_class ["entry_body"]]
+      (Node.get_html (render_node sp) node)]
+
+and entry_link sp node = li [ link_to_node sp node ]
+
+and link_to_node sp node =
+  a ~service:(Lazy.force page_service) ~sp
+    [pcdata (Node.title node)] (Node.name node)
 
 let rec reload_pages () =
   printf "[%s] reloading pages\n%!"
