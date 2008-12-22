@@ -13,6 +13,7 @@ let pagedir = ref "pages"
 let toplevel_title = ref "eigenclass"
 let toplevel_pages = ref 5
 let toplevel_links = ref 10
+let refresh_period = ref 10.
 
 let pages = Pages.make !pagedir
 
@@ -99,8 +100,8 @@ and toplevel_service = lazy begin
        let pages = List.take !toplevel_pages (List.filter Node.syndicated all)
        in page_with_title
             !toplevel_title
-            [div ~a:[a_class ["entries"]] (List.map (entry_div sp) pages);
-             div ~a:[a_class ["sidebar"]]
+            [div_with_class "entries" (List.map (entry_div sp) pages);
+             div_with_class "sidebar"
                [maybe_ul (List.map (entry_link sp) (List.take !toplevel_links all))]])
 end
 
@@ -111,8 +112,7 @@ and entry_div sp node =
        pcdata " ";
        span ~a:[a_class ["title"]] [link_to_node sp node]];
 
-    div ~a:[a_class ["entry_body"]]
-      (Node.get_html (render_node sp) node)]
+    div_with_class "entry_body" (Node.get_html (render_node sp) node)]
 
 and entry_link sp node = li [ link_to_node sp node ]
 
@@ -124,7 +124,7 @@ let rec reload_pages () =
   printf "[%s] reloading pages\n%!"
     (Netdate.mk_mail_date (Unix.gettimeofday ()));
   Pages.refresh pages;
-  Lwt_unix.sleep 10. >>= fun () -> reload_pages ()
+  Lwt_unix.sleep !refresh_period >>= fun () -> reload_pages ()
 
 let init x = ignore (Lazy.force x)
 
