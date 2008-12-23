@@ -18,6 +18,7 @@ let rss_title = ref "eigenclass"
 let rss_link = ref "http://eigenclass.org"
 let rss_description = ref !rss_title
 let rss_nitems = ref 10
+let encoding = ref "UTF-8"
 
 let pages = Pages.make !pagedir
 
@@ -154,7 +155,7 @@ and rss2_service = lazy begin
                    items in
        let b = Buffer.create 256 in
        let add = Buffer.add_string b in
-         XML.decl ~version:"1.0" ~encoding:"UTF-8" add ();
+         XML.decl ~version:"1.0" ~encoding:!encoding add ();
          XML.output add xml;
          return (Buffer.contents b, "text/xml"))
 end
