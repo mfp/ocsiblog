@@ -10,6 +10,7 @@ module Pages = Catalog.Make(Node)
 module SM = Simple_markup
 
 let pagedir = ref "pages"
+let commentdir = ref "comments"
 let toplevel_title = ref "eigenclass"
 let toplevel_pages = ref 5
 let toplevel_links = ref 10
@@ -21,6 +22,7 @@ let rss_nitems = ref 10
 let encoding = ref "UTF-8"
 
 let pages = Pages.make !pagedir
+let comments = Comments.make !commentdir
 
 let not_found () = raise Eliom_common.Eliom_404
 
@@ -29,11 +31,6 @@ let force = Lazy.force
 let attachment_file page basename =
   String.join "/" [!pagedir; page ^ ".files"; basename]
 
-let page_with_title thetitle thebody =
-  return (html
-            (head (title (pcdata thetitle)) [])
-            (body thebody))
-
 let div_with_class klass ?(a = []) l = div ~a:(a_class [klass] :: a) l
 
 let maybe_ul ?a = function
@@ -41,6 +38,11 @@ let maybe_ul ?a = function
   | hd::tl -> ul ?a hd tl
 
 let format_date t = Netdate.mk_mail_date t
+
+let page_with_title thetitle thebody =
+  return (html
+            (head (title (pcdata thetitle)) [])
+            (body thebody))
 
 let render_pre _ ~kind txt = pre [pcdata txt]
 
@@ -87,16 +89,19 @@ and render_node sp =
     ~render_link:(render_link sp)
     ~render_img:(render_img sp)
 
+and serve_page sp page () = match Pages.get_entry pages page with
+    None -> not_found ()
+  | Some node ->
+      let thetitle = Node.title node in
+      let body_html = Node.get_html (render_node sp) node in
+        page_with_title thetitle
+          ((h1 [pcdata thetitle]) :: html_with_comments ~sp page body_html)
+
 and page_service = lazy begin
   register_new_service
     ~path:[""]
     ~get_params:(suffix (string "page"))
-    (fun sp page () -> match Pages.get_entry pages page with
-         None -> not_found ()
-       | Some node ->
-           let thetitle = Node.title node in
-           let body_html = Node.get_html (render_node sp) node in
-             page_with_title thetitle ((h1 [pcdata thetitle]) :: body_html))
+    serve_page
 end
 
 and attachment_service = lazy begin
@@ -123,6 +128,25 @@ and toplevel_service = lazy begin
             [div_with_class "entries" (List.map (entry_div sp) pages);
              div_with_class "sidebar"
                [maybe_ul (List.map (entry_link sp) (List.take !toplevel_links all))]])
+end
+
+and dummy_comment_service = lazy begin
+  register_new_service
+    ~path:[""]
+    ~get_params:(string "page")
+    serve_page
+end
+
+and post_comment_service = lazy begin
+  Eliom_predefmod.Actions.register_new_post_service
+    ~fallback:(force dummy_comment_service)
+    ~post_params:(string "author" ** string "body")
+    (fun sp page (author, body) ->
+       try
+         if Pages.has_entry pages page then
+           Comments.add_comment comments page ~author ~body ();
+         return []
+       with _ -> return [])
 end
 
 and rss2_service = lazy begin
@@ -159,6 +183,44 @@ and rss2_service = lazy begin
          XML.output add xml;
          return (Buffer.contents b, "text/xml"))
 end
+
+and html_with_comments ~sp page body =
+  let cs = Option.default [] (Comments.get_comments comments page) in
+    List.concat
+      [ body;
+        [ hr ();
+          div_with_class "comments"
+            (h2 [pcdata "Comments"] :: format_comments ~sp cs) ];
+        [ post_form (force post_comment_service) sp comment_form page; ] ]
+
+and format_comments ~sp l = match List.fast_sort (Comments.compare `Date) l with
+    [] -> []
+  | c :: cs -> [ol ~a:[a_class ["comments"]]
+                 (format_comment ~sp c) (List.map (format_comment ~sp) cs)]
+
+and format_comment ~sp c =
+  li
+    [div_with_class "comment"
+       [ div_with_class "comment_body"
+           (render_comment_body sp c.Comments.c_markup);
+         div_with_class "comment_meta"
+           [ b [pcdata c.Comments.c_author]; pcdata ", ";
+             pcdata (format_date c.Comments.c_date) ] ]]
+
+and render_comment_body sp =
+  Simple_markup__html.to_html
+    ~render_pre:(render_pre ())
+    ~render_img:(fun img ->
+                   XHTML.M.a ~a:[a_href (uri_of_string img.SM.img_src)]
+                     [pcdata img.SM.img_alt])
+    ~render_link:(render_link sp)
+
+and comment_form (author_name, body_name) =
+  [p [ pcdata "Author:"; br ();
+       string_input ~input_type:`Text ~name:author_name (); br ();
+       pcdata "Comment:"; br ();
+       textarea ~name:body_name ~rows:10 ~cols:82 (); br ();
+       string_input ~input_type:`Submit ~value:"Click" () ]]
 
 and entry_div sp node =
   div [
@@ -215,4 +277,6 @@ let () =
                init attachment_service;
                init toplevel_service;
                init rss2_service;
+               init dummy_comment_service;
+               init post_comment_service;
                ignore (reload_pages ()))

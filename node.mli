@@ -1,5 +1,7 @@
 include Catalog.ENTRY with type sort_criterion = [ `Date | `Title ]
 
+val split_headers_body : string -> (string * string) list * string
+
 val make : name:string -> file:string -> entry
 val date : entry -> float
 val markup : entry -> Simple_markup.paragraph list

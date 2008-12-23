@@ -23,7 +23,7 @@ OCAMLPACKS[] =
    lwt
 
 PP = -pp "camlp4o Camlp4FoldGenerator.cmo"
-OCAMLFLAGS += -thread -dtypes $(PP)
+OCAMLFLAGS += -g -thread -dtypes $(PP)
 OCAMLDEPFLAGS += $(PP)
 
 TESTS[] =
@@ -41,6 +41,7 @@ EXE_FILES[] =
     catalog
     node
     rss
+    comments
     ocsiblog
     ocsiblog_main
 
