@@ -36,6 +36,11 @@ let compare_by_criteria basic_comparison ?(extra = []) crit =
     | c::cs -> basic_sort (compare_loop cs) c
   in compare_loop (crit :: extra)
 
+let dir_filter_map f dir =
+  List.filter_map
+    (fun fname -> if String.starts_with fname "." then None else (f fname))
+    (Array.to_list (Sys.readdir dir))
+
 module Make(Entry : sig
               include ENTRY
               val make : name:string -> file:string -> entry
@@ -65,29 +70,26 @@ struct
 
   let (/^) = Filename.concat
 
-  type entry_file = string * float * string
+  type entry_file = { fname : string; mtime : float; name : string }
 
-  let get_files basedir : entry_file list =
-    List.filter_map
+  let entry_info { mtime = mtime; name = name; fname = file } =
+    { e_time = mtime; e_name = name; e_data = Entry.make ~file ~name }
+
+  let get_files basedir =
+    dir_filter_map
       (fun f ->
-         if String.starts_with f "." then None else
          let fname = basedir /^ f in
          let stat = Unix.stat fname in
            match stat.Unix.st_kind with
-               Unix.S_REG -> Some (fname, stat.Unix.st_mtime, f)
+               Unix.S_REG ->
+                 Some { fname = fname; mtime = stat.Unix.st_mtime; name = f; }
              | _ -> None)
-      (Array.to_list (Sys.readdir basedir))
-
-  let entry_info ~mtime ~name ~fname =
-    { e_time = mtime; e_name = name; e_data = Entry.make ~file:fname ~name }
+      basedir
 
   let make basedir =
     let entries =
       List.fold_left
-        (fun m (fname, mtime, name) ->
-           M.add name (entry_info ~mtime ~name ~fname) m)
-        M.empty
-        (get_files basedir)
+        (fun m t -> M.add t.name (entry_info t) m) M.empty (get_files basedir)
     in
       {
         basedir = basedir;
@@ -102,8 +104,8 @@ struct
   let refresh t =
     let entries', mtimes', entry_files' =
       List.fold_left
-        (fun (s, m, s2) ((_, mtime, name) as entry_file)->
-           (S.add name s, M.add name mtime m, ES.add entry_file s2))
+        (fun (s, m, s2) (t as entry_file)->
+           (S.add t.name s, M.add t.name t.mtime m, ES.add entry_file s2))
         (S.empty, M.empty, ES.empty)
         (get_files t.basedir) in
     let entries, mtimes =
@@ -127,8 +129,8 @@ struct
       if S.mem e.e_name del_entries then None
       else if S.mem e.e_name changed_entries then begin
         Some (entry_info
-                ~name:e.e_name ~fname:(t.basedir /^ e.e_name)
-                ~mtime:(M.find e.e_name mtimes'))
+                { name = e.e_name; fname = (t.basedir /^ e.e_name);
+                  mtime = M.find e.e_name mtimes'; })
       end else if changed_deps e then begin
         Entry.signal_deps_changed e.e_data;
         Some e
@@ -136,9 +138,9 @@ struct
 
     let new_entries =
       ES.fold
-        (fun (fname, mtime, name) m -> match S.mem name entries with
+        (fun efile m -> match S.mem efile.name entries with
              true -> m
-           | false -> M.add name (entry_info ~mtime ~fname ~name) m)
+           | false -> M.add efile.name (entry_info efile) m)
         entry_files'
         M.empty
 
