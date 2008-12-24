@@ -47,7 +47,8 @@ let format_date t = Netdate.mk_mail_date t
 
 let page_with_title thetitle thebody =
   return (html
-            (head (title (pcdata thetitle)) [])
+            (head (title (pcdata thetitle))
+               [css_link (uri_of_string "/blog/ocsiblog.css") ()])
             (body thebody))
 
 let render_pre _ ~kind txt = pre [pcdata txt]
@@ -87,7 +88,9 @@ and render_link sp href =
     href
 
 and render_img sp img =
-  XHTML.M.img ~src:(uri_of_string img.SM.img_src) ~alt:img.SM.img_alt ()
+  XHTML.M.img
+    ~a:[a_class ["centered"]]
+    ~src:(uri_of_string img.SM.img_src) ~alt:img.SM.img_alt ()
 
 and render_node sp =
   Simple_markup__html.to_html
@@ -130,7 +133,7 @@ and toplevel_service = lazy begin
        let pages = List.take !toplevel_pages (List.filter Node.syndicated all)
        in page_with_title
             !toplevel_title
-            [div_with_class "entries" (List.map (entry_div sp) pages);
+            [div_with_class "main" (List.map (entry_div sp) pages);
              div_with_class "sidebar"
                [maybe_ul (List.map (entry_link sp) (List.take !toplevel_links all))]])
 end
@@ -249,13 +252,12 @@ and comment_form (author_name, body_name) =
        string_input ~input_type:`Submit ~value:"Click" () ]]
 
 and entry_div sp node =
-  div [
-    h2 ~a:[a_class ["entry_title"]]
-      [span ~a:[a_class ["date"]] [pcdata (format_date (Node.date node))];
-       pcdata " ";
-       span ~a:[a_class ["title"]] [link_to_node sp node]];
-
-    div_with_class "entry_body" (Node.get_html (render_node sp) node)]
+  div_with_class "entry"
+    [h2 ~a:[a_class ["entry_title"]]
+       [span ~a:[a_class ["date"]] [pcdata (format_date (Node.date node))];
+        pcdata " ";
+        span ~a:[a_class ["title"]] [link_to_node sp node]];
+     div_with_class "entry_body" (Node.get_html (render_node sp) node)]
 
 and entry_link sp node = li [ link_to_node sp node ]
 
