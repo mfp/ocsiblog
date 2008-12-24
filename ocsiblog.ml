@@ -93,9 +93,8 @@ and serve_page sp page () = match Pages.get_entry pages page with
     None -> not_found ()
   | Some node ->
       let thetitle = Node.title node in
-      let body_html = Node.get_html (render_node sp) node in
         page_with_title thetitle
-          ((h1 [pcdata thetitle]) :: html_with_comments ~sp page body_html)
+          ((h1 [pcdata thetitle]) :: node_body_with_comments ~sp node)
 
 and page_service = lazy begin
   register_new_service
@@ -184,14 +183,20 @@ and rss2_service = lazy begin
          return (Buffer.contents b, "text/xml"))
 end
 
-and html_with_comments ~sp page body =
+and node_body_with_comments ~sp node =
+  let page = Node.name node in
+  let allow_comments = Node.allow_comments node in
+  let body = Node.get_html (render_node sp) node in
   let cs = Option.default [] (Comments.get_comments comments page) in
-    List.concat
-      [ body;
-        [ hr ();
-          div_with_class "comments"
-            (h2 [pcdata "Comments"] :: format_comments ~sp cs) ];
-        [ post_form (force post_comment_service) sp comment_form page; ] ]
+  let comment_form = match allow_comments with
+      true -> [ post_form (force post_comment_service) sp comment_form page ]
+    | false -> [] in
+  let comments_div = match cs, allow_comments with
+      [], false -> []
+    | _ -> [ div_with_class "comments"
+             (h2 [pcdata "Comments"] :: format_comments ~sp cs) ]
+  in
+    List.concat [ body; [ hr () ]; comments_div; comment_form ]
 
 and format_comments ~sp l = match List.fast_sort (Comments.compare `Date) l with
     [] -> []

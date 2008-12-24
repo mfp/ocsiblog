@@ -12,6 +12,7 @@ type entry = {
   deps : string list Lazy.t;
   tags : string list;
   syndicated : bool;
+  allow_comments : bool;
 }
 
 type sort_criterion = [`Date | `Title]
@@ -69,6 +70,7 @@ let make ~name ~file =
   let text = Std.input_file ~bin:true file in
   let headers, body = split_headers_body text in
   let lookup k = List.assoc k headers in
+  let bool default k = try bool_of_string (lookup k) with _ -> default in
   let markup = Simple_markup.parse_text body in
     {
       name = name;
@@ -79,7 +81,8 @@ let make ~name ~file =
       html = None;
       deps = lazy (find_deps markup);
       tags = (try String.nsplit (lookup "tags") " " with _ -> []);
-      syndicated = (try bool_of_string (lookup "syndicate") with _ -> false);
+      syndicated = bool false "syndicate";
+      allow_comments = bool false "allow_comments";
     }
 
 let name e = e.name
@@ -89,6 +92,7 @@ let syndicated e = e.syndicated
 let title e = e.title
 let tags e = e.tags
 let deps e = Lazy.force e.deps
+let allow_comments e = e.allow_comments
 
 let signal_deps_changed e =
   e.html <- None
