@@ -31,6 +31,8 @@ let force = Lazy.force
 let attachment_file page basename =
   String.join "/" [!pagedir; page ^ ".files"; basename]
 
+let with_class f ?(a = []) klass = f ?a:(Some (a_class [klass] :: a))
+
 let div_with_class klass ?(a = []) l = div ~a:(a_class [klass] :: a) l
 
 let maybe_ul ?a = function
@@ -209,8 +211,11 @@ and format_comment ~sp c =
        [ div_with_class "comment_body"
            (render_comment_body sp c.Comments.c_markup);
          div_with_class "comment_meta"
-           [ b [pcdata c.Comments.c_author]; pcdata ", ";
-             pcdata (format_date c.Comments.c_date) ] ]]
+           [ entity "mdash";
+             with_class span "comment_author" [pcdata c.Comments.c_author];
+             pcdata ", ";
+             with_class span "comment_date"
+               [pcdata (format_date c.Comments.c_date) ] ]]]
 
 and render_comment_body sp =
   Simple_markup__html.to_html
