@@ -35,6 +35,10 @@ let with_class f ?(a = []) klass = f ?a:(Some (a_class [klass] :: a))
 
 let div_with_class klass ?(a = []) l = div ~a:(a_class [klass] :: a) l
 
+let anchor ?title ~name contents =
+  let title = Option.map_default (fun t -> [a_title t]) [] title in
+    XHTML.M.a ~a:(a_href (uri_of_string ("#" ^ name)) :: title) [pcdata contents]
+
 let maybe_ul ?a = function
     [] -> pcdata ""
   | hd::tl -> ul ?a hd tl
@@ -132,22 +136,27 @@ and toplevel_service = lazy begin
 end
 
 and dummy_comment_service = lazy begin
-  register_new_service
+  Eliom_predefmod.Redirection.register_new_service
     ~path:[""]
     ~get_params:(string "page")
-    serve_page
+    (fun sp page () ->
+       return (Eliom_services.preapply (force page_service) page))
 end
 
 and post_comment_service = lazy begin
-  Eliom_predefmod.Actions.register_new_post_service
+  Eliom_predefmod.String_redirection.register_new_post_service
+    ~options:`Permanent
     ~fallback:(force dummy_comment_service)
     ~post_params:(string "author" ** string "body")
     (fun sp page (author, body) ->
-       try
-         if Pages.has_entry pages page then
-           Comments.add_comment comments page ~author ~body ();
-         return []
-       with _ -> return [])
+       let uri = make_full_string_uri ~sp ~service:(force page_service) page in
+       let ret x = return (uri_of_string x) in
+         try
+           if Pages.has_entry pages page then
+             let c = Comments.add_comment comments page ~author ~body () in
+               ret (uri ^ "#" ^ comment_id c)
+           else ret uri (* will 404 in page_service *)
+         with _ -> ret uri)
 end
 
 and rss2_service = lazy begin
@@ -209,8 +218,8 @@ and format_comments ~sp l = match List.fast_sort (Comments.compare `Date) l with
   | c :: cs -> [ol ~a:[a_class ["comments"]]
                  (format_comment ~sp c) (List.map (format_comment ~sp) cs)]
 
-and format_comment ~sp c =
-  li
+and format_comment ~sp c = let comm_id = comment_id c in
+  li ~a:[a_id comm_id]
     [div_with_class "comment"
        [ div_with_class "comment_body"
            (render_comment_body sp c.Comments.c_markup);
@@ -219,7 +228,10 @@ and format_comment ~sp c =
              with_class span "comment_author" [pcdata c.Comments.c_author];
              pcdata ", ";
              with_class span "comment_date"
-               [pcdata (format_date c.Comments.c_date) ] ]]]
+               [pcdata (format_date c.Comments.c_date) ];
+             anchor ~title:"Permanent link to this comment" ~name:comm_id "#" ]]]
+
+and comment_id c = "comment-" ^ c.Comments.c_id
 
 and render_comment_body sp =
   Simple_markup__html.to_html

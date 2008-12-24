@@ -128,4 +128,5 @@ let add_comment t page ~author ?(date = Unix.gettimeofday ()) ~body () =
            "date: %s\nauthor: %s\n\n" (Netdate.mk_mail_date date) author;
          IO.nwrite io body)
       io;
-    t.comments <- comments
+    t.comments <- comments;
+    c
