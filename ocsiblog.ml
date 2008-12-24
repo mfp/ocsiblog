@@ -198,7 +198,11 @@ and node_body_with_comments ~sp node =
     | _ -> [ div_with_class "comments"
              (h2 [pcdata "Comments"] :: format_comments ~sp cs) ]
   in
-    List.concat [ body; [ hr () ]; comments_div; comment_form ]
+    List.concat
+      [ body;
+        [ hr ();
+          div_with_class "article_date" [pcdata (format_date (Node.date node))] ];
+        comments_div; comment_form ]
 
 and format_comments ~sp l = match List.fast_sort (Comments.compare `Date) l with
     [] -> []
