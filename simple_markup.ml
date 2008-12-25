@@ -115,6 +115,9 @@ let unescape s =
       | c -> Buffer.add_char b c; loop (i + 1)
   in loop 0
 
+let unescape_slice s ~first ~last =
+  unescape (String.strip (String.slice ~first ~last s))
+
 let snd_is s c = String.length s > 1 && s.[1] = c
 
 let collect f x =
@@ -127,6 +130,17 @@ let push_remainder ?(first=2) indent s e =
   let s = String.slice ~first s in
   let s' = String.strip s in
     Enum.push e (indent + first + String.length s' - String.length s, s, s = "")
+
+let adds = Buffer.add_string
+
+let addc = Buffer.add_char
+
+let new_fragment () = Buffer.create 8
+
+let push fragment fragments =
+  if Buffer.length fragment > 0 then
+    Text (Buffer.contents fragment) :: fragments
+  else fragments
 
 let rec read_paragraph ?(skip_blank=true) indent e = match Enum.peek e with
     None -> None
@@ -223,123 +237,116 @@ and read_normal e =
     Some (Normal (parse_text txt))
 
 and parse_text s =
-  let new_fragment () = Buffer.create 8 in
-  let adds = Buffer.add_string in
-  let addc = Buffer.add_char in
-  let push fragment fragments =
-    if Buffer.length fragment > 0 then
-      Text (Buffer.contents fragment) :: fragments
-    else fragments in
-
-  let unescape_slice ~first ~last =
-    unescape (String.strip (String.slice ~first ~last s)) in
+  scan
+    s
+    { max = String.length s;
+      fragments = [];
+      current = new_fragment (); }
+    0
 
   (* scan s starting from n, upto max (exclusive) *)
-  let rec scan st n =
-    let max = st.max in
-    if n >= max then List.rev (push st.current st.fragments)
+and scan s st n =
+  let max = st.max in
+  if n >= max then List.rev (push st.current st.fragments)
 
-    else match s.[n] with
-      | '`' ->
-          delimited (fun ~first ~last -> Code (unescape_slice ~first ~last)) "`" st n
-      | '*' ->
-          delimited (fun ~first ~last -> Bold (unescape_slice ~first ~last)) "*" st n
-      | '_' ->
-          delimited (fun ~first ~last -> Emph (unescape_slice ~first ~last)) "_" st n
-      | '=' ->
-          delimited
-            (fun ~first ~last ->
-               Struck (scan
-                         { max = last; fragments = []; current = new_fragment (); }
-                         first))
-            "==" st n
-      | '!' when matches_at s ~max n "![" ->
-          maybe_link
-            "![" (fun ref -> Image { img_src = ref.src; img_alt = ref.desc })
-            st (n + 2)
-      | '[' ->
-          maybe_link "["
-            (fun ref -> Link { href_target = ref.src; href_desc = ref.desc})
-            st (n + 1)
-      | '\\' when (n + 1) < max -> addc st.current s.[n+1]; scan st (n + 2)
-      | c -> addc st.current c; scan st (n + 1)
+  else match s.[n] with
+    | '`' ->
+        delimited (fun ~first ~last -> Code (unescape_slice s ~first ~last)) "`"
+          s st n
+    | '*' ->
+        delimited (fun ~first ~last -> Bold (unescape_slice s ~first ~last)) "*"
+          s st n
+    | '_' ->
+        delimited (fun ~first ~last -> Emph (unescape_slice s ~first ~last)) "_"
+          s st n
+    | '=' ->
+        delimited
+          (fun ~first ~last ->
+             Struck (scan s
+                       { max = last; fragments = []; current = new_fragment (); }
+                       first))
+          "==" s st n
+    | '!' when matches_at s ~max n "![" ->
+        maybe_link
+          "![" (fun ref -> Image { img_src = ref.src; img_alt = ref.desc })
+          s st (n + 2)
+    | '[' ->
+        maybe_link "["
+          (fun ref -> Link { href_target = ref.src; href_desc = ref.desc})
+          s st (n + 1)
+    | '\\' when (n + 1) < max -> addc st.current s.[n+1]; scan s st (n + 2)
+    | c -> addc st.current c; scan s st (n + 1)
 
-  (* [delimited f delim first] tries to match [delim] starting from [first],
-   * returns Some (offset of char after closing delim) or None *)
-  and delimited f delim st first =
-    let max = st.max in
-    let delim_len = String.length delim in
-    let scan_from_next_char () =
-      addc st.current s.[first];
-      scan st (first + 1)
-    in
-      if not (matches_at s ~max first delim) then scan_from_next_char ()
-      else match scan_past delim ~max (first + String.length delim) with
-          Some n ->
-            let chunk = f ~first:(first + delim_len)
-                          ~last:(n - String.length delim)
-            in scan
-                 { st with fragments = chunk :: push st.current st.fragments;
-                           current = new_fragment () }
-                 n
-        | None -> scan_from_next_char ()
-
-  and maybe_link delim f st n = match scan_link ~max:st.max n with
-      None -> adds st.current delim; scan st n
-    | Some (ref, n) ->
-        scan
-          { st with fragments = f ref :: push st.current st.fragments;
-                    current = (new_fragment ()) }
-          n
-
-  (* return None if delim not found, else Some (offset of char *after* delim) *)
-  and scan_past delim ~max n =
-    let re = Str.regexp (Str.quote delim) in
-    let rec loop m ~max =
-      if m >= max then None else
-        match (try Some (Str.search_forward re s m) with Not_found -> None) with
-          | Some m when m < max && s.[m-1] <> '\\' -> Some (m + String.length delim)
-          | Some m when m < max -> loop (m + 1) ~max
-          | _ -> None (* no match or >= max  *)
-    in loop n ~max
-
-  (* returns None or offset of char after the reference
-   * (i.e. after closing ')'). *)
-  and scan_link ~max n = match scan_past "]" ~max n with
-      None -> None
-    | Some end_of_desc ->
-        if end_of_desc >= max then None
-        else match s.[end_of_desc] with
-            '(' ->
-              begin match scan_past ")" ~max (end_of_desc + 1) with
-                  None -> None
-                | Some end_of_uri ->
-                    let ref =
-                      {
-                        desc = unescape_slice ~first:n ~last:(end_of_desc - 1);
-                        src = unescape_slice
-                                ~first:(end_of_desc + 1)
-                                ~last:(end_of_uri - 1)
-                      }
-                    in Some (ref, end_of_uri)
-              end
-          | _ -> None
-
-  and matches_at s ~max n delim =
-    let len = String.length delim in
-      if n + len > max then false
-      else
-        let rec loop n m k =
-          if k = 0 then true
-          else if s.[n] = delim.[m] then loop (n + 1) (m + 1) (k - 1)
-          else false
-        in loop n 0 len
+(* [delimited f delim first] tries to match [delim] starting from [first],
+ * returns Some (offset of char after closing delim) or None *)
+and delimited f delim s st first =
+  let max = st.max in
+  let delim_len = String.length delim in
+  let scan_from_next_char () =
+    addc st.current s.[first];
+    scan s st (first + 1)
   in
-    scan
-      { max = String.length s;
-        fragments = [];
-        current = new_fragment (); }
-      0
+    if not (matches_at s ~max first delim) then scan_from_next_char ()
+    else match scan_past ~delim s ~max (first + String.length delim) with
+        Some n ->
+          let chunk = f ~first:(first + delim_len)
+                        ~last:(n - String.length delim)
+          in scan s
+               { st with fragments = chunk :: push st.current st.fragments;
+                         current = new_fragment () }
+               n
+      | None -> scan_from_next_char ()
+
+and maybe_link delim f s st n = match scan_link s ~max:st.max n with
+    None -> adds st.current delim; scan s st n
+  | Some (ref, n) ->
+      scan s
+        { st with fragments = f ref :: push st.current st.fragments;
+                  current = (new_fragment ()) }
+        n
+
+(* return None if delim not found, else Some (offset of char *after* delim) *)
+and scan_past ~delim s ~max n =
+  let re = Str.regexp (Str.quote delim) in
+  let rec loop m ~max =
+    if m >= max then None else
+      match (try Some (Str.search_forward re s m) with Not_found -> None) with
+        | Some m when m < max && s.[m-1] <> '\\' -> Some (m + String.length delim)
+        | Some m when m < max -> loop (m + 1) ~max
+        | _ -> None (* no match or >= max  *)
+  in loop n ~max
+
+(* returns None or offset of char after the reference
+ * (i.e. after closing ')'). *)
+and scan_link s ~max n = match scan_past ~delim:"]" s ~max n with
+    None -> None
+  | Some end_of_desc ->
+      if end_of_desc >= max then None
+      else match s.[end_of_desc] with
+          '(' ->
+            begin match scan_past ~delim:")" s ~max (end_of_desc + 1) with
+                None -> None
+              | Some end_of_uri ->
+                  let ref =
+                    {
+                      desc = unescape_slice s ~first:n ~last:(end_of_desc - 1);
+                      src = unescape_slice s
+                              ~first:(end_of_desc + 1)
+                              ~last:(end_of_uri - 1)
+                    }
+                  in Some (ref, end_of_uri)
+            end
+        | _ -> None
+
+and matches_at s ~max n delim =
+  let len = String.length delim in
+    if n + len > max then false
+    else
+      let rec loop n m k =
+        if k = 0 then true
+        else if s.[n] = delim.[m] then loop (n + 1) (m + 1) (k - 1)
+        else false
+      in loop n 0 len
 
 let parse_text s =
   let input =
