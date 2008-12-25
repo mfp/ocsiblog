@@ -37,7 +37,16 @@ and text_to_html ~render_link ~render_img = function
   | Bold s -> b [pcdata s]
   | Struck l -> del (List.map (text_to_html ~render_link ~render_img) l)
   | Code s -> code [pcdata s]
-  | Link href -> render_link href
+  | Anchor id ->
+      (*  would like to do
+            a ~a:[XHTML.M_01_00.a_name_01_00 id] []
+          but that'd require switching to M_01_00 everywhere, so cheap hack *)
+      b ~a:[a_id id] []
+  | Link href -> begin match href.href_target with
+        s when String.length s >= 1 && s.[0] = '#' ->
+          a ~a:[a_href (uri_of_string s)] [pcdata href.href_desc]
+      | _ -> render_link href
+    end
   | Image href -> render_img href
 
 let to_html ~render_pre ~render_link ~render_img l :

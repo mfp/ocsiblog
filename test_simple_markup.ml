@@ -66,7 +66,12 @@ let test_read_normal () =
     [Normal
        [Link { href_target = "http://foo.com"; href_desc = "http://foo.com" }]]
     "[http://foo.com]()";
-  check [Normal [Text ""]] "[]()"
+  check [Normal [Text ""]] "[]()";
+  check
+    [Normal
+       [Text "foo "; Anchor "internal-link"; Text ". ";
+        Link { href_target = "#internal-link"; href_desc = "back" }]]
+    "foo [](#internal-link). [back](#internal-link)"
 
 let test_read_normal_unmatched () =
   check [Normal [Text "foo * bar"]] "foo * bar";

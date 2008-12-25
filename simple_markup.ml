@@ -21,6 +21,7 @@ and text =
   | Struck of par_text
   | Code of string
   | Link of href
+  | Anchor of string
   | Image of img_ref
 
 and href = {
@@ -82,6 +83,7 @@ struct
     | Bold s -> fprintf fmt "@[<2>Bold@ %S@]" s
     | Code s -> fprintf fmt "@[<2>Code@ %S@]" s
     | Struck txt -> fprintf fmt "@[<2>Struck@ %a@]" pp_par_text txt
+    | Anchor s -> fprintf fmt "@[<2>Anchor@ %S@]" s
     | Link href ->
         fprintf fmt "@[<2>Link@ {@[target=%S,@ %S}@]@]" href.href_target href.href_desc
     | Image img ->
@@ -275,6 +277,7 @@ and scan s st n =
           (fun ref -> match ref.src, ref.desc with
                "", "" -> Text ""
              | "", desc -> Link { href_target = desc; href_desc = desc }
+             | src, "" when src.[0] = '#' -> Anchor (String.slice ~first:1 src)
              | src, desc -> Link { href_target = ref.src; href_desc = ref.desc})
           s st (n + 1)
     | '\\' when (n + 1) < max -> addc st.current s.[n+1]; scan s st (n + 2)
