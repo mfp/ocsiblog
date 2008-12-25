@@ -255,6 +255,8 @@ and parse_text s =
     if n >= max then List.rev (push current fragments)
 
     else match s.[n] with
+      | '`' ->
+          delimited (fun ~first ~last -> Code (unescape_slice ~first ~last)) "`" n
       | '*' ->
           delimited (fun ~first ~last -> Bold (unescape_slice ~first ~last)) "*" n
       | '_' ->
