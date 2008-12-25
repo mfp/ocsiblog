@@ -352,5 +352,5 @@ let parse_text s =
   let input =
      List.map
        (fun l -> let l' = String.strip l in (indentation l, l', l' = ""))
-       (String.nsplit s "\n")
+       (Str.split (Str.regexp "\n") s)
   in collect (read_paragraph 0) (List.enum input)
