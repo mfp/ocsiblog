@@ -272,7 +272,10 @@ and scan s st n =
           s st (n + 2)
     | '[' ->
         maybe_link "["
-          (fun ref -> Link { href_target = ref.src; href_desc = ref.desc})
+          (fun ref -> match ref.src, ref.desc with
+               "", "" -> Text ""
+             | "", desc -> Link { href_target = desc; href_desc = desc }
+             | src, desc -> Link { href_target = ref.src; href_desc = ref.desc})
           s st (n + 1)
     | '\\' when (n + 1) < max -> addc st.current s.[n+1]; scan s st (n + 2)
     | c -> addc st.current c; scan s st (n + 1)

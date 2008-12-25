@@ -61,7 +61,12 @@ let test_read_normal () =
     "foo *bar* *baz* _foobar_ [desc](target)![alt](image).";
   check
     [Normal [Bold "foo"; Text " "; Struck [Bold "foo"; Emph "bar"]]]
-    "*foo* ==*foo*_bar_=="
+    "*foo* ==*foo*_bar_==";
+  check
+    [Normal
+       [Link { href_target = "http://foo.com"; href_desc = "http://foo.com" }]]
+    "[http://foo.com]()";
+  check [Normal [Text ""]] "[]()"
 
 let test_read_normal_unmatched () =
   check [Normal [Text "foo * bar"]] "foo * bar";
