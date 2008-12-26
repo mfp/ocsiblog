@@ -132,7 +132,7 @@ let collect f x =
 let push_remainder ?(first=2) indent s e =
   let s = String.slice ~first s in
   let s' = String.strip s in
-    Enum.push e (indent + first + String.length s' - String.length s, s, s = "")
+    Enum.push e (indent + first + indentation s, s', s' = "")
 
 let adds = Buffer.add_string
 

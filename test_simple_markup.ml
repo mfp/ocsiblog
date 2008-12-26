@@ -46,7 +46,20 @@ let test_read_list () =
     [Ulist ([Normal [Text "foo"]; Ulist ([Normal [Text "bar"]], []);
              Olist ([Normal [Text "1"]], [[Normal [Text "2 #3"]]])],
             [])]
-    "* foo\n\n * bar\n # 1\n # 2\n#3"
+    "* foo\n\n * bar\n # 1\n # 2\n#3";
+  check
+    [Ulist
+       ([Normal [Text "some paragraph"]; Normal [Text "And another one."]],
+        [[Normal [Text "two"]]; [Normal [Text "three"]]])]
+    "
+     *   some
+         paragraph
+
+         And another one.
+
+     *   two
+     *   three
+    "
 
 let test_read_normal () =
   check [Normal [Text "foo "; Struck [Text " bar baz "]; Text " foobar"]]
