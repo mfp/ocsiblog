@@ -204,23 +204,16 @@ and read_list f is_item indent e =
 
 and read_pre kind e =
   let kind = match kind with "" -> None | s -> Some s in
-  let rec read_until_end ls = match Enum.get e with
-      None | Some (_, "}}", _) -> begin match List.rev ("" :: ls) with
-          (* don't forget the last \n *)
-            [] -> Some (Pre ("", kind)) (* can't happen *)
-          | (fst :: _) as lines -> let n = indentation fst in
-              Some (Pre (String.concat "\n" (strip_indent n lines), kind))
-      end
+  (*  don't forget the last \n *)
+  let ret ls = Some (Pre (String.concat "\n" (List.rev ("" :: ls)), kind)) in
+  let rec read_until_end fstindent ls = match Enum.get e with
+      None | Some (_, "}}", _) -> ret ls
     | Some (indentation, s, _) ->
-        read_until_end ((String.make indentation ' ' ^ s) :: ls)
-  in read_until_end []
-
-and strip_indent indent ls =
-  let nospace = Str.regexp "[^ ]" in
-  let dostrip s =
-    let off = try Str.search_forward nospace s 0 with Not_found -> 0 in
-      String.slice ~first:(min off indent) s
-  in List.map (fun s -> dostrip s) ls
+        let spaces = String.make (max 0 (indentation - fstindent)) ' ' in
+          read_until_end fstindent ((spaces ^ s) :: ls)
+  in match Enum.get e with
+      None | Some (_, "}}", _) -> ret []
+    | Some (indentation, s, _) -> read_until_end indentation [s]
 
 and read_quote indent e =
   let push_and_finish e elm = Enum.push e elm; raise Enum.No_more_elements in
