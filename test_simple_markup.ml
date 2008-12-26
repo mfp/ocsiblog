@@ -84,7 +84,21 @@ let test_read_pre () =
     [Normal [Text "foo * bar"];
      Pre("a\n b\n  c\n", None);
      Pre("a\\0\\1\\2\n b\n  c\n", Some "whatever")]
-    "foo * bar\n{{\na\n b\n  c\n}}\n\n{{whatever\na\\0\\1\\2\n b\n  c\n}}\n  "
+    "foo * bar\n{{\na\n b\n  c\n}}\n\n{{whatever\na\\0\\1\\2\n b\n  c\n}}\n  ";
+  check
+    [Pre("a\n b\n  c\n", Some "foobar")]
+    "{{foobar
+     a
+      b
+       c
+     }}";
+  check
+    [Pre("a\n b\n  c\n", Some "foo")]
+    "  {{foo
+         a
+          b
+           c
+         }}"
 
 let test_heading () =
   for i = 1 to 6 do
