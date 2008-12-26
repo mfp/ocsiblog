@@ -122,6 +122,7 @@ let unescape_slice s ~first ~last =
   unescape (String.strip (String.slice ~first ~last s))
 
 let snd_is s c = String.length s > 1 && s.[1] = c
+let snd_is_space s = snd_is s ' ' || snd_is s '\t'
 
 let collect f x =
   let rec loop acc = match f x with
@@ -165,10 +166,10 @@ and skip_blank_line e = match Enum.peek e with
 
 and read_nonempty indent e s = match s.[0] with
     '!' -> read_heading s
-  | '*' when snd_is s ' ' -> push_remainder indent s e; read_ul indent e
-  | '#' when snd_is s ' ' -> push_remainder indent s e; read_ol indent e
+  | '*' when snd_is_space s -> push_remainder indent s e; read_ul indent e
+  | '#' when snd_is_space s -> push_remainder indent s e; read_ol indent e
   | '{' when snd_is s '{' -> read_pre (String.slice s ~first:2) e
-  | '>' when snd_is s ' ' || s = ">" ->
+  | '>' when snd_is_space s || s = ">" ->
       (* last check needed because "> " becomes ">" *)
       Enum.push e (indent, s, false); read_quote indent e
   | _ -> Enum.push e (indent, s, false); read_normal e
@@ -181,13 +182,13 @@ and read_heading s =
 and read_ul indent e =
   read_list
     (fun fst others -> Ulist (fst, others))
-    (fun s -> String.length s >= 2 && s.[0] = '*' && s.[1] = ' ')
+    (fun s -> snd_is_space s && s.[0] = '*')
     indent e
 
 and read_ol indent e =
   read_list
     (fun fst others -> Olist (fst, others))
-    (fun s -> String.length s >= 2 && s.[0] = '#' && s.[1] = ' ')
+    (fun s -> snd_is_space s && s.[0] = '#')
     indent e
 
 and read_list f is_item indent e =
@@ -237,7 +238,7 @@ and read_normal e =
     match Enum.peek e with
       None | Some (_, _, true) -> return ()
     | Some (_, l, _) -> match l.[0] with
-            '!' | '*' | '#' | '>' when snd_is l ' ' -> return ()
+            '!' | '*' | '#' | '>' when snd_is_space l -> return ()
           | '{' when snd_is l '{' -> return ()
           | _ -> Enum.junk e; gettxt (l :: ls) in
   let txt = gettxt [] in

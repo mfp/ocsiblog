@@ -59,7 +59,21 @@ let test_read_list () =
 
      *   two
      *   three
+    ";
+  check
+    [Ulist ([Normal [Text "foo "; Bold "bar baz"]; Normal [Text "xxx"]],
+            [[Normal [Text "baz"]]])]
+    "*\tfoo\n*bar\n baz*\n\n xxx\n\n* baz";
+  check
+    [Normal [Text "foo"]; Ulist ([Normal [Text "bar"]], [])]
+    "foo\n*\tbar";
+  check
+    [Olist ([Normal [Text "one"]],
+            [[Normal [Text "two"]]; [Normal [Text "three"]]])]
     "
+     #\tone
+     #\ttwo
+     #\tthree"
 
 let test_read_normal () =
   check [Normal [Text "foo "; Struck [Text " bar baz "]; Text " foobar"]]
