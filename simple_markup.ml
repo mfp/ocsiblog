@@ -99,13 +99,14 @@ end
 let string_of_paragraph = PP.pp PP.pp_paragraph
 let string_of_paragraphs = PP.pp (PP.pp_list PP.pp_paragraph)
 
-let indentation s =
-  let rec loop n max =
-    if n >= max then n
+let indentation ?(ts=8) s =
+  let rec loop n indent max =
+    if n >= max then indent
     else match s.[n] with
-        ' ' -> loop (n + 1) max
-      | _ -> n
-  in loop 0 (String.length s)
+        ' ' -> loop (n + 1) (indent + 1) max
+      | '\t' -> loop (n + 1) (indent + 8) max
+      | _ -> indent
+  in loop 0 0 (String.length s)
 
 let unescape s =
   let b = Buffer.create (String.length s) in
