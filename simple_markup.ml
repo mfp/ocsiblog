@@ -141,10 +141,10 @@ let addc = Buffer.add_char
 
 let new_fragment () = Buffer.create 8
 
-let push fragment fragments =
-  if Buffer.length fragment > 0 then
-    Text (Buffer.contents fragment) :: fragments
-  else fragments
+let push_current st =
+  if Buffer.length st.current > 0 then
+    Text (Buffer.contents st.current) :: st.fragments
+  else st.fragments
 
 let rec read_paragraph ?(skip_blank=true) indent e = match Enum.peek e with
     None -> None
@@ -255,7 +255,7 @@ and parse_text s =
   (* scan s starting from n, upto max (exclusive) *)
 and scan s st n =
   let max = st.max in
-  if n >= max then List.rev (push st.current st.fragments)
+  if n >= max then List.rev (push_current st)
 
   else match s.[n] with
     | '`' ->
@@ -304,7 +304,7 @@ and delimited f delim s st first =
           let chunk = f ~first:(first + delim_len)
                         ~last:(n - String.length delim)
           in scan s
-               { st with fragments = chunk :: push st.current st.fragments;
+               { st with fragments = chunk :: push_current st;
                          current = new_fragment () }
                n
       | None -> scan_from_next_char ()
@@ -313,7 +313,7 @@ and maybe_link delim f s st n = match scan_link s ~max:st.max n with
     None -> adds st.current delim; scan s st n
   | Some (ref, n) ->
       scan s
-        { st with fragments = f ref :: push st.current st.fragments;
+        { st with fragments = f ref :: push_current st;
                   current = (new_fragment ()) }
         n
 
