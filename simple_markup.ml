@@ -360,9 +360,9 @@ and matches_at s ~max n delim =
         else false
       in loop n 0 len
 
-let parse_text s =
-  let input =
-     List.map
-       (fun l -> let l' = String.strip l in (indentation l, l', l' = ""))
-       (Str.split (Str.regexp "\n") s)
-  in collect (read_paragraph 0) (List.enum input)
+let parse_enum e =
+  collect (read_paragraph 0)
+    (Enum.map (fun l -> let l' = String.strip l in (indentation l, l', l' = "")) e)
+
+let parse_lines ls = parse_enum (List.enum ls)
+let parse_text s = parse_lines ((Str.split (Str.regexp "\n") s))
