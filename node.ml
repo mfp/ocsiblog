@@ -29,7 +29,7 @@ let split_headers_body s =
           Some (k, v) -> loop ((String.strip k, String.strip v) :: headers) ls
         | None -> (headers, String.concat "\n" (l :: ls))
       end
-  in loop [] (String.nsplit s "\n")
+  in loop [] (Str.split (Str.regexp "\n") s)
 
 let inner_link_re = Str.regexp "^[A-Za-z0-9_-]+$"
 let is_inner_link s = Str.string_match inner_link_re s 0

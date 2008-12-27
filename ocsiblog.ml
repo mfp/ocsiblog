@@ -63,8 +63,8 @@ let map_uri ~relative ~broken ~not_relative uri =
     let url = Neturl.parse_url uri in
       not_relative url
   with Neturl.Malformed_URL -> (* a relative URL, basic verification *)
-    match String.nsplit uri "/" with
-        [ page; file ] when Pages.has_entry pages page ->
+    match Str.split_delim (Str.regexp "/") uri with
+        [ page; file ] when file <> "" && Pages.has_entry pages page ->
           relative page file
       | _ -> (* broken relative link *) broken uri
 

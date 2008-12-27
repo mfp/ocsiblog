@@ -104,9 +104,9 @@ let rec mkdir_p ?(perms = 0o750) path =
 let get_set_elm x s = S.choose (S.diff s (S.diff s (S.singleton x)))
 
 let add_comment t page ~author ?(date = Unix.gettimeofday ()) ~body () =
-  let author = match String.nsplit author "\n" with
-      [] | "" :: _ -> "anonymous"
-    | s :: _ -> s in
+  let author = match String.strip author with
+      "" -> "anonymous"
+    | s -> (try fst (String.split s "\n") with _ -> s) in
   let basename =
     Digest.to_hex (Digest.string (String.concat "\n" [author; body])) in
   let page_comments = find_default S.empty page t.comments in
