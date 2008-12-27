@@ -24,12 +24,12 @@ let parse_date s = Netdate.since_epoch (Netdate.parse s)
 
 let split_headers_body s =
   let rec loop headers = function
-      [] -> (headers, "")
+      [] -> (headers, [])
     | l::ls -> begin match (try Some (String.split l ":") with _ -> None) with
           Some (k, v) -> loop ((String.strip k, String.strip v) :: headers) ls
-        | None -> (headers, String.concat "\n" (l :: ls))
+        | None -> (headers, (l :: ls))
       end
-  in loop [] (Str.split (Str.regexp "\n") s)
+  in loop [] (Str.split_delim (Str.regexp "\n") s)
 
 let inner_link_re = Str.regexp "^[A-Za-z0-9_-]+$"
 let is_inner_link s = Str.string_match inner_link_re s 0
@@ -68,10 +68,10 @@ let find_deps ps =
 
 let make ~name ~file =
   let text = Std.input_file ~bin:true file in
-  let headers, body = split_headers_body text in
+  let headers, body_lines = split_headers_body text in
   let lookup k = List.assoc k headers in
   let bool default k = try bool_of_string (lookup k) with _ -> default in
-  let markup = Simple_markup.parse_text body in
+  let markup = Simple_markup.parse_lines body_lines in
     {
       name = name;
       title = assoc_default (fun _ -> Filename.basename file) "title" headers;

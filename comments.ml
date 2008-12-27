@@ -30,12 +30,12 @@ let (/^) = Filename.concat
 
 let read_comment file =
   try
-    let hs, body = Node.split_headers_body (Std.input_file ~bin:true file) in
+    let hs, body_ls = Node.split_headers_body (Std.input_file ~bin:true file) in
       Some {
         c_id = Filename.basename file;
         c_author = List.assoc "author" hs;
         c_date = Netdate.since_epoch (Netdate.parse (List.assoc "date" hs));
-        c_markup = Simple_markup.parse_text body;
+        c_markup = Simple_markup.parse_lines body_ls;
       }
   with _ -> None
 
