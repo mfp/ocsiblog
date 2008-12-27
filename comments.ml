@@ -101,32 +101,37 @@ let rec mkdir_p ?(perms = 0o750) path =
           (paths path [])
     end
 
+let get_set_elm x s = S.choose (S.diff s (S.diff s (S.singleton x)))
+
 let add_comment t page ~author ?(date = Unix.gettimeofday ()) ~body () =
   let author = match String.nsplit author "\n" with
       [] | "" :: _ -> "anonymous"
     | s :: _ -> s in
   let basename =
     Digest.to_hex (Digest.string (String.concat "\n" [author; body])) in
+  let page_comments = find_default S.empty page t.comments in
   let c =
     {
       c_id = basename;
       c_author = author;
       c_date = date;
       c_markup = Simple_markup.parse_text body;
-    } in
-  let dir = t.basedir /^ page in
-  mkdir_p dir;
-  let fname = dir /^ basename in
-  let io = IO.output_channel (open_out_bin fname) in
-  let comments =
-    M.add page (S.add c (find_default S.empty page t.comments)) t.comments
+    }
   in
-    Std.finally
-      (fun () -> IO.close_out io)
-      (fun io ->
-         IO.printf io
-           "date: %s\nauthor: %s\n\n" (Netdate.mk_mail_date date) author;
-         IO.nwrite io body)
-      io;
-    t.comments <- comments;
-    c
+    if S.mem c page_comments then
+      get_set_elm c page_comments
+    else
+      let dir = t.basedir /^ page in
+        mkdir_p dir;
+        let fname = dir /^ basename in
+        let io = IO.output_channel (open_out_bin fname) in
+        let comments = M.add page (S.add c page_comments) t.comments in
+          Std.finally
+            (fun () -> IO.close_out io)
+            (fun io ->
+               IO.printf io
+                 "date: %s\nauthor: %s\n\n" (Netdate.mk_mail_date date) author;
+               IO.nwrite io body)
+            io;
+          t.comments <- comments;
+          c
