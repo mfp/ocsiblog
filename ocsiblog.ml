@@ -154,12 +154,15 @@ and post_comment_service = lazy begin
     (fun sp page (author, body) ->
        let uri = make_full_string_uri ~sp ~service:(force page_service) page in
        let ret x = return (uri_of_string x) in
-         try
-           if Pages.has_entry pages page then
-             let c = Comments.add_comment comments page ~author ~body () in
-               ret (uri ^ "#" ^ comment_id c)
-           else ret uri (* will 404 in page_service *)
-         with _ -> ret uri)
+         if String.strip body = "" then
+           ret uri
+         else
+           try
+             if Pages.has_entry pages page then
+               let c = Comments.add_comment comments page ~author ~body () in
+                 ret (uri ^ "#" ^ comment_id c)
+                 else ret uri (* will 404 in page_service *)
+           with _ -> ret uri)
 end
 
 and rss2_service = lazy begin
