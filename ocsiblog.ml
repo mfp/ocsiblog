@@ -2,7 +2,7 @@ open Printf
 open Eliom_parameters
 open Lwt
 open XHTML.M
-open Eliom_predefmod.Xhtml
+open Eliom_predefmod.Xhtmlcompact
 open ExtString
 open ExtList
 
@@ -46,10 +46,15 @@ let maybe_ul ?a = function
 let format_date t = Netdate.mk_mail_date t
 
 let page_with_title thetitle thebody =
-  return (html
-            (head (title (pcdata thetitle))
-               [css_link (uri_of_string "/blog/ocsiblog.css") ()])
-            (body thebody))
+  let html =
+    (html
+       (head (title (pcdata thetitle))
+          [css_link (uri_of_string "/blog/ocsiblog.css") ()])
+       (body thebody)) in
+  (* let txt = Xhtmlcompact.xhtml_print *)
+  let txt = Xhtmlcompact_lite.xhtml_print
+               ~version:`HTML_v04_01 ~html_compat:true html
+  in return (txt, "text/html")
 
 let render_pre _ ~kind txt = pre [pcdata txt]
 
@@ -106,7 +111,7 @@ and serve_page sp page () = match Pages.get_entry pages page with
           ((h1 [pcdata thetitle]) :: node_body_with_comments ~sp node)
 
 and page_service = lazy begin
-  register_new_service
+  Eliom_predefmod.Text.register_new_service
     ~path:[""]
     ~get_params:(suffix (string "page"))
     serve_page
@@ -125,7 +130,7 @@ and attachment_service = lazy begin
 end
 
 and toplevel_service = lazy begin
-  register_new_service
+  Eliom_predefmod.Text.register_new_service
     ~path:[""]
     ~get_params:unit
     (fun sp () () ->
