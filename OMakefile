@@ -48,9 +48,12 @@ EXE_FILES[] =
     ocsiblog_main
 
 section
-    #OCAMLOPTFLAGS += -cclib -static -cclib -lcrypto
     OCamlProgram(ocsiblog, $(EXE_FILES))
     OCamlProgram(hello, hello)
+
+section
+    OCAMLOPTFLAGS += -cclib -static -cclib -lcrypto
+    OCamlProgram(ocsiblog.static, $(EXE_FILES))
 
 .DEFAULT: run_tests ocsiblog$(EXE)
 
