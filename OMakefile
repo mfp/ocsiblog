@@ -24,6 +24,7 @@ OCAMLPACKS[] =
 
 PP = -pp "camlp4o Camlp4FoldGenerator.cmo"
 OCAMLFLAGS += -g -thread -dtypes $(PP)
+OCAMLOPTFLAGS += -inline 100
 OCAMLDEPFLAGS += $(PP)
 
 TESTS[] =
