@@ -175,35 +175,57 @@ and rss2_service = lazy begin
     ~path:["rss2"]
     ~get_params:(suffix (string "tags"))
     (fun sp taglist () ->
-       let tags = String.nsplit taglist "," in
-       let all = Pages.sorted_entries ~reverse:true `Date pages in
-       let tags_match node =
-         tags = [] || List.exists (fun t -> List.mem t tags) (Node.tags node) in
-       let nodes =
-         List.take !rss_nitems
-           (List.filter (fun n -> Node.syndicated n && tags_match n) all) in
-       let items =
-         List.map
-           (fun node ->
-              let link =
-                make_full_string_uri ~sp ~service:(force page_service)
-                  (Node.name node)
-              in Rss.make_item ~title:(Node.title node) ~link
-                ~pubDate:(Node.date node) ~guid:(link, true)
-                ~description:(render_node_for_rss ~sp node) ())
-           nodes in
-       let xml = Rss.make
-                   ~title:!rss_title
-                   ~link:!rss_link
-                   ~description:!rss_description
-                   ~ttl:180
-                   items in
-       let b = Buffer.create 256 in
-       let add = Buffer.add_string b in
-         XML.decl ~version:"1.0" ~encoding:!encoding add ();
-         XML.output add xml;
-         return (Buffer.contents b, "text/xml"))
+       generate_xml
+         (Rss.make
+            ~title:!rss_title
+            ~link:!rss_link
+            ~description:!rss_description
+            ~ttl:180
+            (get_rss_items sp (String.nsplit taglist ","))))
 end
+
+and rss1_service = lazy begin
+  Eliom_predefmod.Text.register_new_service
+    ~path:["rss1"]
+    ~get_params:(suffix (string "tags"))
+    (fun sp taglist () ->
+       let items = get_rss_items sp (String.nsplit taglist ",") in
+       let max_f (a : float) b = if a > b then a else b in
+       let date = match List.filter_map Rss.item_date items with
+           [] -> Unix.gettimeofday ()
+         | hd::tl -> List.fold_left max_f hd tl
+       in generate_xml (Rss.make_rdf
+                          ~title:!rss_title
+                          ~link:!rss_link
+                          ~description:!rss_description
+                          ~date
+                          items))
+end
+
+and generate_xml xml =
+  let b = Buffer.create 256 in
+  let add = Buffer.add_string b in
+    XML.decl ~version:"1.0" ~encoding:!encoding add ();
+    XML.output add xml;
+    return (Buffer.contents b, "text/xml")
+
+and get_rss_items sp tags =
+  let all = Pages.sorted_entries ~reverse:true `Date pages in
+  let tags_match node =
+    tags = [] || List.exists (fun t -> List.mem t tags) (Node.tags node) in
+  let nodes =
+    List.take !rss_nitems
+      (List.filter (fun n -> Node.syndicated n && tags_match n) all)
+  in
+    List.map
+      (fun node ->
+         let link =
+           make_full_string_uri ~sp ~service:(force page_service)
+             (Node.name node)
+         in Rss.make_item ~title:(Node.title node) ~link
+           ~pubDate:(Node.date node) ~guid:(link, true)
+           ~description:(render_node_for_rss ~sp node) ())
+      nodes
 
 and node_body_with_comments ~sp node =
   let page = Node.name node in
@@ -312,6 +334,7 @@ let () =
     (fun () -> init page_service;
                init attachment_service;
                init toplevel_service;
+               init rss1_service;
                init rss2_service;
                init dummy_comment_service;
                init post_comment_service;
