@@ -19,6 +19,7 @@ let rss_title = ref "eigenclass"
 let rss_link = ref "http://eigenclass.org"
 let rss_description = ref !rss_title
 let rss_nitems = ref 10
+let port = 80
 let encoding = ref "UTF-8"
 
 let pages = Pages.make !pagedir
@@ -60,7 +61,7 @@ let render_pre _ ~kind txt = pre [pcdata txt]
 
 let absolute_service_link service ~sp desc params =
   XHTML.M.a
-    ~a:[a_href (make_full_uri ~sp ~service:(force service) params)]
+    ~a:[a_href (make_full_uri ~sp ~port ~service:(force service) params)]
     desc
 
 let map_uri ~relative ~broken ~not_relative uri =
@@ -310,7 +311,7 @@ and render_node_for_rss ~sp node =
             ~not_relative:(fun _ -> XHTML.M.img ~src:(uri_of_string uri) ~alt ())
             ~relative:(fun p f ->
                          XHTML.M.img
-                           ~src:(make_full_uri ~sp
+                           ~src:(make_full_uri ~sp ~port
                                    ~service:(force attachment_service) (p, f))
                            ~alt ())
             ~broken:(fun _ -> pcdata alt)
