@@ -317,10 +317,8 @@ and render_node_for_rss ~sp node =
             ~broken:(fun _ -> pcdata alt)
             uri
       end
-      (Node.markup node) in
-  let b = Buffer.create 13 in
-    List.iter (XML.output (Buffer.add_string b)) (XHTML.M.toeltl html);
-    Buffer.contents b
+      (Node.markup node)
+  in Xhtmlcompact_lite.xhtml_list_print ~html_compat:true html
 
 let rec reload_pages () =
   printf "[%s] reloading pages\n%!"
