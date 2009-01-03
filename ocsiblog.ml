@@ -22,6 +22,9 @@ let rss_nitems = ref 10
 let port = 80
 let encoding = ref "UTF-8"
 
+let ctype_meta = meta ~content:("text/html; charset=" ^ !encoding)
+                   ~a:[a_http_equiv "Content-Type"] ()
+
 let pages = Pages.make !pagedir
 let comments = Comments.make !commentdir
 
@@ -33,7 +36,6 @@ let attachment_file page basename =
   String.join "/" [!pagedir; page ^ ".files"; basename]
 
 let with_class f ?(a = []) klass = f ?a:(Some (a_class [klass] :: a))
-
 let div_with_class klass ?(a = []) l = div ~a:(a_class [klass] :: a) l
 let div_with_id id ?(a = []) l = div ~a:(a_id id :: a) l
 
@@ -48,31 +50,12 @@ let maybe_ul ?a = function
 let format_date t = Netdate.format "%d %B %Y" (Netdate.create t)
 let format_date_time t = Netdate.format "%d %B %Y at %R" (Netdate.create t)
 
-let page_with_title thetitle thebody =
-  let copyright =
-    p [pcdata "Copyright "; entity "copy"; pcdata " 2005-2009 Mauricio Fernández"] in
-  let html =
-    (html
-       (head (title (pcdata thetitle))
-          [css_link (uri_of_string "/blog/ocsiblog.css") ();
-           meta ~content:("text/html; charset=" ^ !encoding)
-             ~a:[a_http_equiv "Content-Type"] ()])
-       (body (thebody @ [div_with_id "footer" [copyright]]))) in
-  (* let txt = Xhtmlcompact.xhtml_print *)
-  let txt = Xhtmlcompact_lite.xhtml_print
-               ~version:`HTML_v04_01 ~html_compat:true html
-  in return (txt, "text/html")
-
-let render_pre _ ~kind txt = match kind with
-    "html" -> unsafe_data txt
-  | _ -> pre [code [pcdata txt]]
-
 let absolute_service_link service ~sp desc params =
   XHTML.M.a
     ~a:[a_href (make_full_uri ~sp ~port ~service:(force service) params)]
     desc
 
-let map_uri ~relative ~broken ~not_relative uri =
+let map_body_uri ~relative ~broken ~not_relative uri =
   try
     let url = Neturl.parse_url uri in
       not_relative url
@@ -82,48 +65,30 @@ let map_uri ~relative ~broken ~not_relative uri =
           relative page file
       | _ -> (* broken relative link *) broken uri
 
-let rec render_link_aux ~link_attachment ~link_page href =
+let render_link_aux ~link_attachment ~link_page href =
   let uri = href.SM.href_target in
   let desc = pcdata href.SM.href_desc in
     if Node.is_inner_link uri then begin
       if Pages.has_entry pages uri then link_page [desc] uri
       else desc
     end else
-      map_uri
+      map_body_uri
         ~not_relative:(fun _ -> XHTML.M.a ~a:[a_href (uri_of_string uri)] [desc])
         ~relative:(fun page file -> link_attachment [desc] (page, file))
         ~broken:(fun _ -> desc)
         uri
 
-and render_link sp href =
-  render_link_aux
-    ~link_page:(a ~service:(force page_service) ~sp)
-    ~link_attachment:(a ~service:(force attachment_service) ~sp)
-    href
-
-and render_img sp img =
-  XHTML.M.img
-    ~a:[a_class ["centered"]]
-    ~src:(uri_of_string img.SM.img_src) ~alt:img.SM.img_alt ()
-
-and render_node sp =
-  Simple_markup__html.to_html
-    ~render_pre:(render_pre sp)
-    ~render_link:(render_link sp)
-    ~render_img:(render_img sp)
-
-and serve_page sp page () = match Pages.get_entry pages page with
-    None -> not_found ()
-  | Some node ->
-      let thetitle = Node.title node in
-      let toplink =
-        a ~service:(force toplevel_service) ~sp [pcdata "eigenclass.org"] ()
-      in page_with_title thetitle
-           (div_with_id "header"
-              [h1 [pcdata thetitle];
-               with_class p "date" [pcdata (format_date (Node.date node))];
-               p [toplink]] ::
-            node_body_with_comments ~sp node)
+let rec page_with_title sp thetitle thebody =
+  let copyright =
+    p [pcdata "Copyright "; entity "copy"; pcdata " 2005-2009 Mauricio Fernández"] in
+  let html =
+    (html
+       (head (title (pcdata thetitle))
+          [css_link (uri_of_string "/blog/ocsiblog.css") (); ctype_meta])
+       (body (thebody @ [div_with_id "footer" [copyright]]))) in
+  let txt = Xhtmlcompact_lite.xhtml_print
+               ~version:`HTML_v04_01 ~html_compat:true html
+  in return (txt, "text/html")
 
 and page_service = lazy begin
   Eliom_predefmod.Text.register_new_service
@@ -131,6 +96,19 @@ and page_service = lazy begin
     ~get_params:(suffix (string "page"))
     serve_page
 end
+
+and serve_page sp page () = match Pages.get_entry pages page with
+    None -> not_found ()
+  | Some node ->
+      let thetitle = Node.title node in
+      let toplink =
+        a ~service:(force toplevel_service) ~sp [pcdata "eigenclass.org"] ()
+      in page_with_title sp thetitle
+           (div_with_id "header"
+              [h1 [pcdata thetitle];
+               with_class p "date" [pcdata (format_date (Node.date node))];
+               p [toplink]] ::
+            node_body_with_comments ~sp node)
 
 and attachment_service = lazy begin
   Eliom_predefmod.Files.register_new_service
@@ -151,7 +129,7 @@ and toplevel_service = lazy begin
     (fun sp () () ->
        let all = Pages.sorted_entries ~reverse:true `Date pages in
        let pages = List.take !toplevel_pages (List.filter Node.syndicated all)
-       in page_with_title
+       in page_with_title sp
             !toplevel_title
             [div_with_id "main" (List.map (entry_div sp) pages);
              div_with_id "sidebar"
@@ -260,6 +238,27 @@ and node_body_with_comments ~sp node =
          div_with_class "article_date" [pcdata (format_date_time (Node.date node))]];
      div_with_id "comments" ( comments_div @ comment_form )]
 
+and render_node sp =
+  Simple_markup__html.to_html
+    ~render_pre:(render_pre sp)
+    ~render_link:(render_link sp)
+    ~render_img:(render_img sp)
+
+and render_pre sp ~kind txt = match kind with
+    "html" -> unsafe_data txt
+  | _ -> pre [code [pcdata txt]]
+
+and render_img sp img =
+  XHTML.M.img
+    ~a:[a_class ["centered"]]
+    ~src:(uri_of_string img.SM.img_src) ~alt:img.SM.img_alt ()
+
+and render_link sp href =
+  render_link_aux
+    ~link_page:(a ~service:(force page_service) ~sp)
+    ~link_attachment:(a ~service:(force attachment_service) ~sp)
+    href
+
 and format_comments ~sp l = match List.fast_sort (Comments.compare `Date) l with
     [] -> []
   | c :: cs -> [ol ~a:[a_class ["comments"]]
@@ -312,7 +311,7 @@ and link_to_node sp node =
 and render_node_for_rss ~sp node =
   let html =
     Simple_markup__html.to_html
-      ~render_pre:(render_pre ())
+      ~render_pre:(render_pre sp)
       ~render_link:begin
         render_link_aux
           ~link_attachment:(absolute_service_link attachment_service ~sp)
@@ -320,7 +319,7 @@ and render_node_for_rss ~sp node =
       end
       ~render_img:begin fun img ->
         let uri = img.SM.img_src and alt = img.SM.img_alt in
-          map_uri
+          map_body_uri
             ~not_relative:(fun _ -> XHTML.M.img ~src:(uri_of_string uri) ~alt ())
             ~relative:(fun p f ->
                          XHTML.M.img
