@@ -63,7 +63,9 @@ let page_with_title thetitle thebody =
                ~version:`HTML_v04_01 ~html_compat:true html
   in return (txt, "text/html")
 
-let render_pre _ ~kind txt = pre [pcdata txt]
+let render_pre _ ~kind txt = match kind with
+    "html" -> unsafe_data txt
+  | _ -> pre [code [pcdata txt]]
 
 let absolute_service_link service ~sp desc params =
   XHTML.M.a
@@ -280,7 +282,7 @@ and comment_id c = "comment-" ^ c.Comments.c_id
 
 and render_comment_body sp =
   Simple_markup__html.to_html
-    ~render_pre:(render_pre ())
+    ~render_pre:(fun ~kind txt -> pre [code [pcdata txt]])
     ~render_img:(fun img ->
                    XHTML.M.a ~a:[a_href (uri_of_string img.SM.img_src)]
                      [pcdata img.SM.img_alt])
