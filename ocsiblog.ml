@@ -35,6 +35,7 @@ let attachment_file page basename =
 let with_class f ?(a = []) klass = f ?a:(Some (a_class [klass] :: a))
 
 let div_with_class klass ?(a = []) l = div ~a:(a_class [klass] :: a) l
+let div_with_id id ?(a = []) l = div ~a:(a_id id :: a) l
 
 let anchor ?title ~name contents =
   let title = Option.map_default (fun t -> [a_title t]) [] title in
@@ -44,14 +45,19 @@ let maybe_ul ?a = function
     [] -> pcdata ""
   | hd::tl -> ul ?a hd tl
 
-let format_date t = Netdate.mk_mail_date t
+let format_date t = Netdate.format "%d %B %Y" (Netdate.create t)
+let format_date_time t = Netdate.format "%d %B %Y at %R" (Netdate.create t)
 
 let page_with_title thetitle thebody =
+  let copyright =
+    p [pcdata "Copyright "; entity "copy"; pcdata " 2005-2009 Mauricio Fernández"] in
   let html =
     (html
        (head (title (pcdata thetitle))
-          [css_link (uri_of_string "/blog/ocsiblog.css") ()])
-       (body thebody)) in
+          [css_link (uri_of_string "/blog/ocsiblog.css") ();
+           meta ~content:("text/html; charset=" ^ !encoding)
+             ~a:[a_http_equiv "Content-Type"] ()])
+       (body (thebody @ [div_with_id "footer" [copyright]]))) in
   (* let txt = Xhtmlcompact.xhtml_print *)
   let txt = Xhtmlcompact_lite.xhtml_print
                ~version:`HTML_v04_01 ~html_compat:true html
@@ -108,8 +114,14 @@ and serve_page sp page () = match Pages.get_entry pages page with
     None -> not_found ()
   | Some node ->
       let thetitle = Node.title node in
-        page_with_title thetitle
-          ((h1 [pcdata thetitle]) :: node_body_with_comments ~sp node)
+      let toplink =
+        a ~service:(force toplevel_service) ~sp [pcdata "eigenclass.org"] ()
+      in page_with_title thetitle
+           (div_with_id "header"
+              [h1 [pcdata thetitle];
+               with_class p "date" [pcdata (format_date (Node.date node))];
+               p [toplink]] ::
+            node_body_with_comments ~sp node)
 
 and page_service = lazy begin
   Eliom_predefmod.Text.register_new_service
@@ -139,8 +151,8 @@ and toplevel_service = lazy begin
        let pages = List.take !toplevel_pages (List.filter Node.syndicated all)
        in page_with_title
             !toplevel_title
-            [div_with_class "main" (List.map (entry_div sp) pages);
-             div_with_class "sidebar"
+            [div_with_id "main" (List.map (entry_div sp) pages);
+             div_with_id "sidebar"
                [maybe_ul (List.map (entry_link sp) (List.take !toplevel_links all))]])
 end
 
@@ -238,14 +250,13 @@ and node_body_with_comments ~sp node =
     | false -> [] in
   let comments_div = match cs, allow_comments with
       [], false -> []
-    | _ -> [ div_with_class "comments"
-             (h2 [pcdata "Comments"] :: format_comments ~sp cs) ]
+    | _ -> h2 [pcdata "Comments"] :: format_comments ~sp cs
   in
-    List.concat
-      [ body;
-        [ hr ();
-          div_with_class "article_date" [pcdata (format_date (Node.date node))] ];
-        comments_div; comment_form ]
+    [div_with_id "article" body;
+     div_with_id "addendum"
+       [ hr ();
+         div_with_class "article_date" [pcdata (format_date_time (Node.date node))]];
+     div_with_id "comments" ( comments_div @ comment_form )]
 
 and format_comments ~sp l = match List.fast_sort (Comments.compare `Date) l with
     [] -> []
@@ -262,7 +273,7 @@ and format_comment ~sp c = let comm_id = comment_id c in
              with_class span "comment_author" [pcdata c.Comments.c_author];
              pcdata ", ";
              with_class span "comment_date"
-               [pcdata (format_date c.Comments.c_date) ];
+               [pcdata (format_date_time c.Comments.c_date) ];
              anchor ~title:"Permanent link to this comment" ~name:comm_id "#" ]]]
 
 and comment_id c = "comment-" ^ c.Comments.c_id
@@ -280,12 +291,12 @@ and comment_form (author_name, body_name) =
        string_input ~input_type:`Text ~name:author_name (); br ();
        pcdata "Comment:"; br ();
        textarea ~name:body_name ~rows:10 ~cols:82 (); br ();
-       string_input ~input_type:`Submit ~value:"Click" () ]]
+       string_input ~input_type:`Submit ~value:"Leave comment" () ]]
 
 and entry_div sp node =
   div_with_class "entry"
     [h2 ~a:[a_class ["entry_title"]]
-       [span ~a:[a_class ["date"]] [pcdata (format_date (Node.date node))];
+       [span ~a:[a_class ["date"]] [pcdata (format_date_time (Node.date node))];
         pcdata " ";
         span ~a:[a_class ["title"]] [link_to_node sp node]];
      div_with_class "entry_body" (Node.get_html (render_node sp) node)]
