@@ -50,10 +50,11 @@ let maybe_ul ?a = function
 let format_date t = Netdate.format "%d %B %Y" (Netdate.create t)
 let format_date_time t = Netdate.format "%d %B %Y at %R" (Netdate.create t)
 
+let absolute_service_uri service ~sp params =
+  make_full_uri ~sp ~port ~service:(force service) params
+
 let absolute_service_link service ~sp desc params =
-  XHTML.M.a
-    ~a:[a_href (make_full_uri ~sp ~port ~service:(force service) params)]
-    desc
+  XHTML.M.a ~a:[a_href (absolute_service_uri service ~sp params)] desc
 
 let map_body_uri ~relative ~broken ~not_relative uri =
   try
@@ -84,7 +85,7 @@ let rec page_with_title sp thetitle thebody =
   let html =
     (html
        (head (title (pcdata thetitle))
-          [css_link (uri_of_string "/blog/ocsiblog.css") (); ctype_meta])
+          [css_link (uri_of_string "/blog/ocsiblog.css") (); ctype_meta; rss2_link sp])
        (body (thebody @ [div_with_id "footer" [copyright]]))) in
   let txt = Xhtmlcompact_lite.xhtml_print
                ~version:`HTML_v04_01 ~html_compat:true html
@@ -194,6 +195,12 @@ and rss1_service = lazy begin
                           ~date
                           items))
 end
+
+and make_rss_link ?(type_="application/rss+xml") sp serv title =
+  link ~a:[a_href (abs_service_uri serv ~sp ""); a_rel [`Alternate];
+           a_title title; a_type type_] ()
+
+and rss2_link sp = make_rss_link sp rss2_service !rss_title
 
 and generate_xml xml =
   let b = Buffer.create 256 in
@@ -323,8 +330,7 @@ and render_node_for_rss ~sp node =
             ~not_relative:(fun _ -> XHTML.M.img ~src:(uri_of_string uri) ~alt ())
             ~relative:(fun p f ->
                          XHTML.M.img
-                           ~src:(make_full_uri ~sp ~port
-                                   ~service:(force attachment_service) (p, f))
+                           ~src:(absolute_service_uri attachment_service ~sp (p, f))
                            ~alt ())
             ~broken:(fun _ -> pcdata alt)
             uri
