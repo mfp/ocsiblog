@@ -21,7 +21,7 @@ let rss_description = ref !rss_title
 let rss_nitems = ref 10
 let port = 80
 let encoding = ref "UTF-8"
-
+let css_uri = uri_of_string "/blog/ocsiblog.css"
 let ctype_meta = meta ~content:("text/html; charset=" ^ !encoding)
                    ~a:[a_http_equiv "Content-Type"] ()
 
@@ -84,8 +84,7 @@ let rec page_with_title sp thetitle thebody =
     p [pcdata "Copyright "; entity "copy"; pcdata " 2005-2009 Mauricio Fernández"] in
   let html =
     (html
-       (head (title (pcdata thetitle))
-          [css_link (uri_of_string "/blog/ocsiblog.css") (); ctype_meta; rss2_link sp])
+       (head (title (pcdata thetitle)) [css_link css_uri (); ctype_meta; rss2_link sp])
        (body (thebody @ [div_with_id "footer" [copyright]]))) in
   let txt = Xhtmlcompact_lite.xhtml_print
                ~version:`HTML_v04_01 ~html_compat:true html
