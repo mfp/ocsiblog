@@ -9,8 +9,13 @@ open ExtList
 module Pages = Catalog.Make(Node)
 module SM = Simple_markup
 
+let with_class f ?(a = []) klass = f ?a:(Some (a_class [klass] :: a))
+let div_with_class klass ?(a = []) l = div ~a:(a_class [klass] :: a) l
+let div_with_id id ?(a = []) l = div ~a:(a_id id :: a) l
+
 let pagedir = ref "pages"
 let commentdir = ref "comments"
+let toplevel_link = ref "eigenclass.org"
 let toplevel_title = ref "eigenclass"
 let toplevel_pages = ref 5
 let toplevel_links = ref 10
@@ -24,6 +29,9 @@ let encoding = ref "UTF-8"
 let css_uri = uri_of_string "/blog/ocsiblog.css"
 let ctype_meta = meta ~content:("text/html; charset=" ^ !encoding)
                    ~a:[a_http_equiv "Content-Type"] ()
+let copyright =
+  p [pcdata "Copyright "; entity "copy"; pcdata " 2005-2009 Mauricio Fernández"]
+let footer = div_with_id "footer" [copyright]
 
 let pages = Pages.make !pagedir
 let comments = Comments.make !commentdir
@@ -34,13 +42,11 @@ let (!!) = Lazy.force
 let attachment_file page basename =
   String.join "/" [!pagedir; page ^ ".files"; basename]
 
-let with_class f ?(a = []) klass = f ?a:(Some (a_class [klass] :: a))
-let div_with_class klass ?(a = []) l = div ~a:(a_class [klass] :: a) l
-let div_with_id id ?(a = []) l = div ~a:(a_id id :: a) l
-
 let anchor ?title ~name contents =
   let title = Option.map_default (fun t -> [a_title t]) [] title in
-    XHTML.M.a ~a:(a_href (uri_of_string ("#" ^ name)) :: title) [pcdata contents]
+    XHTML.M.a
+      ~a:(a_class ["anchor"] :: a_href (uri_of_string ("#" ^ name)) :: title)
+      [pcdata contents]
 
 let maybe_ul ?a = function
     [] -> pcdata ""
@@ -79,12 +85,10 @@ let render_link_aux ~link_attachment ~link_page href =
         uri
 
 let rec page_with_title sp thetitle thebody =
-  let copyright =
-    p [pcdata "Copyright "; entity "copy"; pcdata " 2005-2009 Mauricio Fernández"] in
   let html =
     (html
        (head (title (pcdata thetitle)) [css_link css_uri (); ctype_meta; rss2_link sp])
-       (body (thebody @ [div_with_id "footer" [copyright]]))) in
+       (body thebody)) in
   let txt = Xhtmlcompact_lite.xhtml_print ~version:`HTML_v04_01 ~html_compat:true html
   in return (txt, "text/html")
 
@@ -96,14 +100,14 @@ and serve_page sp page () = match Pages.get_entry pages page with
     None -> not_found ()
   | Some node ->
       let thetitle = Node.title node in
-      let toplink =
-        a ~service:!!toplevel_service ~sp [pcdata "eigenclass.org"] ()
+      let toplink = a ~service:!!toplevel_service ~sp [pcdata !toplevel_link] ()
       in page_with_title sp thetitle
-           (div_with_id "header"
-              [h1 [pcdata thetitle];
-               with_class p "date" [pcdata (format_date (Node.date node))];
-               p [toplink]] ::
-            node_body_with_comments ~sp node)
+           [div_with_id "article_body"
+              (div_with_id "header"
+                 [h1 [a ~service:!!page_service ~sp [pcdata thetitle] page];
+                  with_class p "date" [pcdata (format_date (Node.date node))];
+                  p [toplink]] ::
+               (node_body_with_comments ~sp node @ [footer]))]
 
 and attachment_service = lazy begin
   Eliom_predefmod.Files.register_new_service
@@ -123,13 +127,17 @@ and toplevel_service = lazy begin
     ~get_params:unit
     (fun sp () () ->
        let all = Pages.sorted_entries ~reverse:true `Date pages in
-       let pages = List.take !toplevel_pages (List.filter Node.syndicated all)
-       in page_with_title sp
+       let pages = List.take !toplevel_pages (List.filter Node.syndicated all) in
+       let links = List.map (entry_link sp) (List.take !toplevel_links all) in
+         page_with_title sp
             !toplevel_title
-            [div_with_id "main" (List.map (entry_div sp) pages);
-             div_with_id "sidebar"
-               [maybe_ul (List.map (entry_link sp) (List.take !toplevel_links all))]])
+            [div_with_id "toplevel_body"
+               [div_with_id "main" (List.map (entry_div sp) pages);
+                div_with_id "sidebar" [maybe_ul links; subscribe sp; footer]]])
 end
+
+and subscribe sp =
+  a ~a:[a_class ["subscribe"]] ~service:!!rss2_service ~sp [pcdata "Subscribe"] ""
 
 and dummy_comment_service = lazy begin
   Eliom_predefmod.Redirection.register_new_service
