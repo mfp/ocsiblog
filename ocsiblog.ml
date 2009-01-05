@@ -213,7 +213,8 @@ and generate_xml xml =
 and get_rss_items sp tags =
   let all = Pages.sorted_entries ~reverse:true `Date pages in
   let tags_match node =
-    tags = [] || List.exists (fun t -> List.mem t tags) (Node.tags node) in
+    tags = [] || tags = ["all"] ||
+    List.exists (fun t -> List.mem t tags) (Node.tags node) in
   let nodes =
     List.take !rss_nitems
       (List.filter (fun n -> Node.syndicated n && tags_match n) all)
