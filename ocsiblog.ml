@@ -150,8 +150,8 @@ and post_comment_service = lazy begin
   Eliom_predefmod.String_redirection.register_new_post_service
     ~options:`Permanent
     ~fallback:!!dummy_comment_service
-    ~post_params:(string "author" ** string "body")
-    (fun sp page (author, body) ->
+    ~post_params:(string "author" ** string "url" ** string "body")
+    (fun sp page (author, (url, body)) ->
        let uri = make_full_string_uri ~sp ~service:!!page_service page in
        let ret x = return (uri_of_string x) in
          if String.strip body = "" then
@@ -159,7 +159,11 @@ and post_comment_service = lazy begin
          else
            try
              if Pages.has_entry pages page then
-               let c = Comments.add_comment comments page ~author ~body () in
+               let url = match url with
+                   "" -> None
+                 | s when Str.string_match (Str.regexp "http://") s 0 -> Some s
+                 | s -> Some ("http://" ^ s) in
+               let c = Comments.add_comment comments page ?url ~author ~body () in
                  ret (uri ^ "#" ^ comment_id c)
                  else ret uri (* will 404 in page_service *)
            with _ -> ret uri)
@@ -284,7 +288,10 @@ and format_comment ~sp c = let comm_id = comment_id c in
            (render_comment_body sp c.Comments.c_markup);
          div_with_class "comment_meta"
            [ entity "mdash";
-             with_class span "comment_author" [pcdata c.Comments.c_author];
+             with_class span "comment_author"
+               [let desc = pcdata c.Comments.c_author in match c.Comments.c_url with
+                    None -> desc
+                  | Some url -> XHTML.M.a ~a:[a_href (uri_of_string url)] [desc]];
              pcdata ", ";
              with_class span "comment_date"
                [pcdata (format_date_time c.Comments.c_date) ];
@@ -300,10 +307,12 @@ and render_comment_body sp =
                      [pcdata img.SM.img_alt])
     ~render_link:(render_link sp)
 
-and comment_form (author_name, body_name) =
-  [p [ pcdata "Author:"; br ();
+and comment_form (author_name, (url_name, body_name)) =
+  [p [ pcdata "Author"; br ();
        string_input ~input_type:`Text ~name:author_name (); br ();
-       pcdata "Comment:"; br ();
+       pcdata "URL"; br ();
+       string_input ~input_type:`Text ~name:url_name (); br ();
+       pcdata "Comment"; br ();
        textarea ~name:body_name ~rows:10 ~cols:82 (); br ();
        string_input ~input_type:`Submit ~value:"Leave comment" () ]]
 
