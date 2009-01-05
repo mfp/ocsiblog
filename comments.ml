@@ -5,6 +5,7 @@ type comment = {
   c_id : string;
   c_author : string;
   c_date : float;
+  c_url : string option;
   c_markup : Simple_markup.paragraph list;
 }
 
@@ -35,9 +36,18 @@ let read_comment file =
         c_id = Filename.basename file;
         c_author = List.assoc "author" hs;
         c_date = Netdate.since_epoch (Netdate.parse (List.assoc "date" hs));
+        c_url = (try Some (List.assoc "url" hs) with Not_found -> None);
         c_markup = Simple_markup.parse_lines body_ls;
       }
   with _ -> None
+
+let write_comment c body io =
+  IO.printf io "date: %s\nauthor: %s\n" (Netdate.mk_mail_date c.c_date) c.c_author;
+  begin match c.c_url with
+      None -> IO.printf io "\n"
+    | Some url -> IO.printf io "url: %s\n\n" url
+  end;
+  IO.nwrite io body
 
 let refresh_comments t page =
   print_endline ("refreshing comments for " ^ page);
@@ -103,18 +113,20 @@ let rec mkdir_p ?(perms = 0o750) path =
 
 let get_set_elm x s = S.choose (S.diff s (S.diff s (S.singleton x)))
 
-let add_comment t page ~author ?(date = Unix.gettimeofday ()) ~body () =
+let add_comment t page ~author ?url ?(date = Unix.gettimeofday ()) ~body () =
   let author = match String.strip author with
       "" -> "anonymous"
     | s -> (try fst (String.split s "\n") with _ -> s) in
   let basename =
-    Digest.to_hex (Digest.string (String.concat "\n" [author; body])) in
+    Digest.to_hex (Digest.string (String.concat "\n"
+                                    [author; Option.default "" url; body])) in
   let page_comments = find_default S.empty page t.comments in
   let c =
     {
       c_id = basename;
       c_author = author;
       c_date = date;
+      c_url = url;
       c_markup = Simple_markup.parse_text body;
     }
   in
@@ -126,12 +138,6 @@ let add_comment t page ~author ?(date = Unix.gettimeofday ()) ~body () =
         let fname = dir /^ basename in
         let io = IO.output_channel (open_out_bin fname) in
         let comments = M.add page (S.add c page_comments) t.comments in
-          Std.finally
-            (fun () -> IO.close_out io)
-            (fun io ->
-               IO.printf io
-                 "date: %s\nauthor: %s\n\n" (Netdate.mk_mail_date date) author;
-               IO.nwrite io body)
-            io;
+          Std.finally (fun () -> IO.close_out io) (write_comment c body) io;
           t.comments <- comments;
           c
