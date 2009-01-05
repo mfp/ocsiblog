@@ -256,9 +256,15 @@ and render_pre sp ~kind txt = match kind with
   | _ -> pre [code [pcdata txt]]
 
 and render_img sp img =
-  XHTML.M.img
-    ~a:[a_class ["centered"]]
-    ~src:(uri_of_string img.SM.img_src) ~alt:img.SM.img_alt ()
+  let mk_img src alt = XHTML.M.img ~a:[a_class ["centered"]] ~src ~alt () in
+    map_body_uri
+      ~relative:(fun p f ->
+                  mk_img
+                    (make_uri ~service:!!attachment_service ~sp (p, f))
+                    img.SM.img_alt)
+      ~not_relative:(fun _ -> mk_img (uri_of_string img.SM.img_src) img.SM.img_alt)
+      ~broken:pcdata
+      img.SM.img_src
 
 and render_link sp href =
   render_link_aux
