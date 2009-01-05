@@ -26,7 +26,7 @@ let rss_description = ref !rss_title
 let rss_nitems = ref 10
 let port = 80
 let encoding = ref "UTF-8"
-let css_uri = uri_of_string "/blog/ocsiblog.css"
+let css_uri = uri_of_string "/R2/ocsiblog.css"
 let ctype_meta = meta ~content:("text/html; charset=" ^ !encoding)
                    ~a:[a_http_equiv "Content-Type"] ()
 let copyright =
@@ -221,8 +221,7 @@ and get_rss_items sp tags =
   in
     List.map
       (fun node ->
-         let link =
-           make_full_string_uri ~sp ~service:!!page_service (Node.name node)
+         let link = string_of_uri (abs_service_uri page_service ~sp (Node.name node))
          in Rss.make_item ~title:(Node.title node) ~link
            ~pubDate:(Node.date node) ~guid:(link, true)
            ~description:(render_node_for_rss ~sp node) ())
