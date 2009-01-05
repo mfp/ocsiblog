@@ -94,7 +94,7 @@ let rec page_with_title sp thetitle thebody =
 
 and page_service =
   lazy (Eliom_predefmod.Text.register_new_service
-          ~path:[""] ~get_params:(suffix (string "page")) serve_page)
+          ~path:["writings"] ~get_params:(suffix (string "page")) serve_page)
 
 and serve_page sp page () = match Pages.get_entry pages page with
     None -> not_found ()
@@ -111,7 +111,7 @@ and serve_page sp page () = match Pages.get_entry pages page with
 
 and attachment_service = lazy begin
   Eliom_predefmod.Files.register_new_service
-    ~path:[""]
+    ~path:["files"]
     ~get_params:(suffix (string "page" ** string "file"))
     (fun sp (page, file) () ->
        if not (Pages.has_entry pages page) then not_found ()
@@ -230,7 +230,7 @@ and get_rss_items sp tags =
 and node_body_with_comments ~sp node =
   let page = Node.name node in
   let allow_comments = Node.allow_comments node in
-  let body = Node.get_html (render_node sp) node in
+  let body = render_node sp (Node.markup node) in
   let cs = Option.default [] (Comments.get_comments comments page) in
   let comment_form = match allow_comments with
       true -> [ post_form !!post_comment_service sp comment_form page ]
