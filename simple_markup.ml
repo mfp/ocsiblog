@@ -205,13 +205,17 @@ and read_list f is_item indent e =
 
 and read_pre kind e =
   let kind = match kind with "" -> None | s -> Some s in
+  let re = Str.regexp "^\\\\+}}$" in
+  let unescape = function
+      s when Str.string_match re s 0 -> String.slice ~first:1 s
+    | s -> s in
   (*  don't forget the last \n *)
   let ret ls = Some (Pre (String.concat "\n" (List.rev ("" :: ls)), kind)) in
   let rec read_until_end fstindent ls = match Enum.get e with
       None | Some (_, "}}", _) -> ret ls
     | Some (indentation, s, _) ->
         let spaces = String.make (max 0 (indentation - fstindent)) ' ' in
-          read_until_end fstindent ((spaces ^ s) :: ls)
+          read_until_end fstindent ((spaces ^ unescape s) :: ls)
   in match Enum.get e with
       None | Some (_, "}}", _) -> ret []
     | Some (indentation, s, _) -> read_until_end indentation [s]

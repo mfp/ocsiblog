@@ -125,7 +125,15 @@ let test_read_pre () =
          a
           b
            c
-         }}"
+         }}";
+  check
+    [Pre("a\n }}\n  \\}}\n   }}}\n", None)]
+    "{{
+       a
+        \\}}
+         \\\\}}
+          }}}
+     }}"
 
 let test_heading () =
   for i = 1 to 6 do
