@@ -234,7 +234,7 @@ and get_rss_items sp tags =
 and node_body_with_comments ~sp node =
   let page = Node.name node in
   let allow_comments = Node.allow_comments node in
-  let body = render_node sp (Node.markup node) in
+  let body = render_node sp node (Node.markup node) in
   let cs = Option.default [] (Comments.get_comments comments page) in
   let comment_form = match allow_comments with
       true -> [ post_form !!post_comment_service sp comment_form page ]
@@ -249,14 +249,17 @@ and node_body_with_comments ~sp node =
          div_with_class "article_date" [pcdata (format_date_time (Node.date node))]];
      div_with_id "comments" ( comments_div @ comment_form )]
 
-and render_node sp =
-  Simple_markup__html.to_html
-    ~render_pre:(render_pre sp)
-    ~render_link:(render_link sp)
-    ~render_img:(render_img sp)
+and render_node ?(summarize = false) sp node sm =
+  let html = Simple_markup__html.to_html
+               ~render_pre:(render_pre sp)
+               ~render_link:(render_link sp)
+               ~render_img:(render_img sp)
+               sm
+  in if summarize then html_summary ~sp node html else html
 
 and render_pre sp ~kind txt = match kind with
     "html" -> unsafe_data txt
+  | "comment" -> XHTML.M.tot (XML.comment txt)
   | _ -> pre [code [pcdata txt]]
 
 and render_img sp img =
@@ -322,7 +325,8 @@ and entry_div sp node =
        [span ~a:[a_class ["date"]] [pcdata (format_date_time (Node.date node))];
         pcdata " ";
         span ~a:[a_class ["title"]] [link_to_node sp node]];
-     div_with_class "entry_body" (Node.get_html (render_node sp) node)]
+     div_with_class "entry_body"
+       (Node.get_html (render_node ~summarize:true sp node) node)]
 
 and entry_link sp node = li [ link_to_node sp node ]
 
@@ -350,7 +354,18 @@ and render_node_for_rss ~sp node =
             uri
       end
       (Node.markup node)
-  in Xhtmlcompact_lite.xhtml_list_print ~html_compat:true html
+  in Xhtmlcompact_lite.xhtml_list_print ~html_compat:true (html_summary ~sp node html)
+
+and html_summary ~sp node l =
+  let rec loop acc = function
+      [] -> List.rev acc
+    | hd :: tl -> match XHTML.M.toelt hd with
+          XML.Comment s when String.strip s = "/syndicate" ->
+            let link = p [abs_service_link page_service ~sp
+                            [pcdata "Read more..."] (Node.name node)]
+            in List.rev (link :: acc)
+        | _ -> loop (hd :: acc) tl
+  in loop [] l
 
 let rec reload_pages () =
   printf "[%s] reloading pages\n%!" (Netdate.mk_mail_date (Unix.gettimeofday ()));
