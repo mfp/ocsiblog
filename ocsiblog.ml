@@ -141,7 +141,7 @@ and subscribe sp =
 
 and dummy_comment_service = lazy begin
   Eliom_predefmod.Redirection.register_new_service
-    ~path:[""]
+    ~path:["post_comment"]
     ~get_params:(string "page")
     (fun sp page () -> return (Eliom_services.preapply !!page_service page))
 end
@@ -171,7 +171,7 @@ end
 
 and rss2_service = lazy begin
   Eliom_predefmod.Text.register_new_service
-    ~path:["rss2"]
+    ~path:["feeds"; "rss2"]
     ~get_params:(suffix (string "tags"))
     (fun sp taglist () ->
        generate_xml
@@ -185,7 +185,7 @@ end
 
 and rss1_service = lazy begin
   Eliom_predefmod.Text.register_new_service
-    ~path:["rss1"]
+    ~path:["feeds"; "rss1"]
     ~get_params:(suffix (string "tags"))
     (fun sp taglist () ->
        let items = get_rss_items sp (String.nsplit taglist ",") in
