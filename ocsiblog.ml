@@ -255,7 +255,7 @@ and render_node ?(summarize = false) sp node sm =
                ~render_link:(render_link sp)
                ~render_img:(render_img sp)
                sm
-  in if summarize then html_summary ~sp node html else html
+  in if summarize then html_summary ~absolute:false ~sp node html else html
 
 and render_pre sp ~kind txt = match kind with
     "html" -> unsafe_data txt
@@ -356,14 +356,16 @@ and render_node_for_rss ~sp node =
       (Node.markup node)
   in Xhtmlcompact_lite.xhtml_list_print ~html_compat:true (html_summary ~sp node html)
 
-and html_summary ~sp node l =
+and html_summary ?(absolute = true) ~sp node l =
   let rec loop acc = function
       [] -> List.rev acc
     | hd :: tl -> match XHTML.M.toelt hd with
           XML.Comment s when String.strip s = "/syndicate" ->
-            let link = p [abs_service_link page_service ~sp
-                            [pcdata "Read more..."] (Node.name node)]
-            in List.rev (link :: acc)
+            let mklink = match absolute with
+              | true -> abs_service_link page_service ~sp
+              | false -> fun x page -> a ~service:!!page_service ~sp x page in
+            let link = p [mklink [pcdata "Read more..."] (Node.name node)] in
+              List.rev (link :: acc)
         | _ -> loop (hd :: acc) tl
   in loop [] l
 
