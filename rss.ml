@@ -27,7 +27,7 @@ let opt_elm kind ?attrs = Option.map (elm kind ?attrs)
 let some_elm kind ?attrs v = Some (elm kind ?attrs v)
 
 let format_date t = Netdate.mk_mail_date t
-let format_date_rdf t = Netdate.format "%Y-%m:%dT%H:%M:%S%z" (Netdate.create t)
+let format_date_rdf t = Netdate.format "%Y-%m-%dT%H:%M:%SZ" (Netdate.create ~zone:0 t)
 
 let filter_concat ls = List.filter_map (fun x -> x) (List.concat ls)
 let filter_some = List.filter_map (fun x -> x)
