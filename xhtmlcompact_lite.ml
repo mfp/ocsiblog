@@ -45,6 +45,7 @@ type attrib =
 let x_print, xh_print =
 
   let aux b ~encode ?(html_compat = false) doctype arbre =
+    let endemptytag = if html_compat then ">" else " />" in
     let rec xh_print_attrs doid2name encode attrs = match attrs with
       [] ->  ();
     | attr::queue ->
@@ -71,7 +72,7 @@ let x_print, xh_print =
         B.add_char b '<';
         B.add_string b tag;
         xh_print_attrs (html_compat && needs_id2name tag) encode attrs;
-        B.add_string b "/>"
+        B.add_string b endemptytag;
       end
 
     and xh_print_tag encode tag attrs taglist =
