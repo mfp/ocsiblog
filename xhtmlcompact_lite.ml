@@ -145,6 +145,7 @@ let x_print, xh_print =
    (fun ?header ?(encode = encode_unsafe) ?html_compat doctype arbre ->
       let b = B.create 16384 in
          (match header with Some s -> B.add_string b s | None -> ());
+         B.add_string b doctype;
          aux b ?encode ?html_compat doctype arbre;
          B.contents b))
 
