@@ -32,6 +32,11 @@ let ctype_meta = meta ~content:("text/html; charset=" ^ !encoding)
 let copyright =
   p [pcdata "Copyright "; entity "copy"; pcdata " 2005-2009 Mauricio Fernández"]
 let footer = div_with_id "footer" [copyright]
+let analytics =
+  [script ~contenttype:"text/javascript" (pcdata "")
+     ~a:[a_src (uri_of_string "http://www.google-analytics.com/urchin.js")];
+   script ~contenttype:"text/javascript"
+     (unsafe_data "_uacct = \"UA-1126249-1\";\nurchinTracker();")]
 
 let pages = Pages.make !pagedir
 let comments = Comments.make !commentdir
@@ -88,7 +93,7 @@ let rec page_with_title sp thetitle thebody =
   let html =
     (html
        (head (title (pcdata thetitle)) [css_link css_uri (); ctype_meta; rss2_link sp])
-       (body thebody)) in
+       (body (thebody @ analytics))) in
   let txt = Xhtmlcompact_lite.xhtml_print ~version:`HTML_v04_01 ~html_compat:true html
   in return (txt, "text/html")
 
