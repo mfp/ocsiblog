@@ -183,6 +183,7 @@ and rss2_service = lazy begin
          (Rss.make
             ~title:!rss_title
             ~link:!rss_link
+            ~self_link:(string_of_uri (abs_service_uri rss2_service ~sp taglist))
             ~description:!rss_description
             ~ttl:180
             (get_rss_items sp (String.nsplit taglist ","))))
