@@ -53,7 +53,7 @@ let xml_of_item item =
        ]])
 
 let make
-      ~title ~link ~description
+      ~title ~link ~description ?self_link
       ?language ?copyright ?managingEditor ?webMaster ?pubDate
       ?lastBuildDate ?category ?generator ?ttl ?image
       items =
@@ -61,6 +61,12 @@ let make
     filter_concat
       [[some_elm "title" title;
         some_elm "link" link;
+        Option.map
+          (fun link ->
+             Leaf ("atom:link", [string_attrib "href" link;
+                                 string_attrib "rel" "self";
+                                 string_attrib "type" "application/rss+xml"]))
+          self_link;
         some_elm "description" description;
 
         opt_elm "language" language;
@@ -83,7 +89,8 @@ let make
        List.map (fun it -> Some (xml_of_item it)) items
       ]
   in
-    Node("rss", [string_attrib "version" "2.0"],
+    Node("rss", [string_attrib "version" "2.0";
+                 string_attrib "xmlns:atom" "http://www.w3.org/2005/Atom"],
          [Node("channel", [], channel)])
 
 let make_rdf
