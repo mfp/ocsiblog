@@ -1,3 +1,4 @@
+(* Copyright (C) 2009 Mauricio Fernandez <mfp@acm.org> *)
 open Printf
 open Eliom_parameters
 open Lwt

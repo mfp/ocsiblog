@@ -1,3 +1,4 @@
+(* Copyright (C) 2009 Mauricio Fernandez <mfp@acm.org> *)
 include Catalog.ENTRY with type sort_criterion = [ `Date | `Title ]
 
 val split_headers_body : string -> (string * string) list * string list

@@ -1,3 +1,4 @@
+(* Copyright (C) 2009 Mauricio Fernandez <mfp@acm.org> *)
 type image = { img_url : string; img_title : string; img_link : string; }
 type item
 

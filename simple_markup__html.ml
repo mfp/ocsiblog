@@ -1,3 +1,4 @@
+(* Copyright (C) 2009 Mauricio Fernandez <mfp@acm.org> *)
 
 open Simple_markup
 open XHTML.M

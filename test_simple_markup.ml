@@ -1,3 +1,4 @@
+(* Copyright (C) 2009 Mauricio Fernandez <mfp@acm.org> *)
 open OUnit
 open Simple_markup
 open Printf
