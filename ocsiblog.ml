@@ -69,7 +69,7 @@ let abs_service_link service ~sp desc params =
 
 let map_body_uri ~relative ~broken ~not_relative uri =
   try
-    let url = Neturl.parse_url uri in
+    let url = Neturl.parse_url ~enable_fragment:true uri in
       not_relative url
   with Neturl.Malformed_URL -> (* a relative URL, basic verification *)
     match Str.split_delim (Str.regexp "/") uri with
@@ -87,7 +87,7 @@ let render_link_aux ~link_attachment ~link_page href =
       map_body_uri
         ~not_relative:(fun _ -> XHTML.M.a ~a:[a_href (uri_of_string uri)] [desc])
         ~relative:(fun page file -> link_attachment [desc] (page, file))
-        ~broken:(fun _ -> desc)
+        ~broken:(fun _ -> pcdata (href.SM.href_desc ^ " (" ^ uri ^ ")"))
         uri
 
 let rec page_with_title sp thetitle thebody =
