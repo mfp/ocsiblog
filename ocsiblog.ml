@@ -13,6 +13,10 @@ module SM = Simple_markup
 let with_class f ?(a = []) klass = f ?a:(Some (a_class [klass] :: a))
 let div_with_class klass ?(a = []) l = div ~a:(a_class [klass] :: a) l
 let div_with_id id ?(a = []) l = div ~a:(a_id id :: a) l
+let js_script_ext ~src =
+  script ~contenttype:"text/javascript" ~a:[a_src (uri_of_string src)] (pcdata "")
+let js_script fmt =
+  ksprintf (fun t -> script ~contenttype:"text/javascript" (unsafe_data t)) fmt
 
 let pagedir = ref "pages"
 let commentdir = ref "comments"
@@ -28,16 +32,16 @@ let rss_nitems = ref 10
 let port = 80
 let encoding = ref "UTF-8"
 let css_uri = uri_of_string "/R2/ocsiblog.css"
+let loading_icon = "/R2/loading.gif"
 let ctype_meta = meta ~content:("text/html; charset=" ^ !encoding)
                    ~a:[a_http_equiv "Content-Type"] ()
 let copyright =
   p [pcdata "Copyright "; entity "copy"; pcdata " 2005-2009 Mauricio Fernández"]
 let footer = div_with_id "footer" [copyright]
 let analytics =
-  [script ~contenttype:"text/javascript" (pcdata "")
-     ~a:[a_src (uri_of_string "http://www.google-analytics.com/urchin.js")];
-   script ~contenttype:"text/javascript"
-     (unsafe_data "_uacct = \"UA-1126249-1\";\nurchinTracker();")]
+  [js_script_ext "http://www.google-analytics.com/urchin.js";
+   js_script "_uacct = 'UA-1126249-1'; urchinTracker();"]
+let jquery_js = js_script_ext "http://ajax.googleapis.com/ajax/libs/jquery/1.3/jquery.min.js"
 
 let pages = Pages.make !pagedir
 let comments = Comments.make !commentdir
@@ -93,7 +97,7 @@ let render_link_aux ~link_attachment ~link_page href =
 let rec page_with_title sp thetitle thebody =
   let html =
     (html
-       (head (title (pcdata thetitle)) [css_link css_uri (); ctype_meta; rss2_link sp])
+       (head (title (pcdata thetitle)) [css_link css_uri (); ctype_meta; rss2_link sp; jquery_js])
        (body (thebody @ analytics))) in
   let txt = Xhtmlcompact_lite.xhtml_print ~version:`HTML_v04_01 ~html_compat:true html
   in return (txt, "text/html")
@@ -175,6 +179,13 @@ and post_comment_service = lazy begin
            with _ -> ret uri)
 end
 
+and preview_comment_service = lazy begin
+  Eliom_predefmod.Blocks.register_new_post_service
+    ~fallback:!!dummy_comment_service
+    ~post_params:(string "preview_body")
+    (fun sp _ body -> return (render_comment_body sp (SM.parse_text body)))
+end
+
 and rss2_service = lazy begin
   Eliom_predefmod.Text.register_new_service
     ~path:["feeds"; "rss2"]
@@ -244,7 +255,7 @@ and node_body_with_comments ~sp node =
   let body = render_node sp node (Node.markup node) in
   let cs = Option.default [] (Comments.get_comments comments page) in
   let comment_form = match allow_comments with
-      true -> [ post_form !!post_comment_service sp comment_form page ]
+      true -> [ post_form !!post_comment_service sp (comment_form sp page) page ]
     | false -> [] in
   let comments_div = match cs, allow_comments with
       [], false -> []
@@ -317,14 +328,32 @@ and render_comment_body sp =
                      [pcdata img.SM.img_alt])
     ~render_link:(render_link sp)
 
-and comment_form (author_name, (url_name, body_name)) =
+and comment_form sp page (author_name, (url_name, body_name)) =
   [p [ pcdata "Author"; br ();
        string_input ~input_type:`Text ~name:author_name (); br ();
        pcdata "URL"; br ();
        string_input ~input_type:`Text ~name:url_name (); br ();
        pcdata "Comment"; br ();
-       textarea ~name:body_name ~rows:10 ~cols:82 (); br ();
-       string_input ~input_type:`Submit ~value:"Leave comment" () ]]
+       textarea ~a:[a_id "comment_body"] ~name:body_name ~rows:10 ~cols:82 (); br ();
+       string_input ~input_type:`Submit ~value:"Leave comment" (); ];
+   js_script
+    "$(document).ready(function (){
+       $('#comment_preview').before('<p><a href=\\'#\\' id=\\'preview_button\\'>Click to preview<\\/a>&nbsp;&nbsp;<img id=\\'preview_loading\\' src=%S alt=\\'loading\\' style=\\'opacity: 0; position: relative; top: 3px;\\'/><\\/p>');
+       $('#preview_button').click(function(ev){
+        ev.preventDefault();
+        $('#preview_loading').fadeTo(200, 1);
+        $.post(%S, {preview_body: $('#comment_body').val()},
+
+               function(data) {
+                 $('#preview_loading').fadeTo(150, 0);
+                 $('#comment_preview').fadeTo(300, 0, function(){$(this).html(data).fadeTo(1000, 1);});
+               })
+       });
+     });"
+     loading_icon
+     (* use magic to address issue with service type (f not general enough) *)
+    (string_of_uri (make_uri (Obj.magic !!dummy_comment_service) sp page));
+   div_with_id "comment_preview" ~a:[a_class ["comment"]] []]
 
 and entry_div sp node =
   div_with_class "entry"
@@ -390,6 +419,6 @@ let () =
                init toplevel_service;
                init rss1_service;
                init rss2_service;
-               init dummy_comment_service;
                init post_comment_service;
+               init preview_comment_service;
                ignore (reload_pages ()))
