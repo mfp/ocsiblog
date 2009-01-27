@@ -153,7 +153,7 @@ and dummy_comment_service = lazy begin
 end
 
 and post_comment_service = lazy begin
-  Eliom_predefmod.String_redirection.register_new_post_service
+  Eliom_predefmod.String_redirection.register_new_post_coservice
     ~options:`Permanent
     ~fallback:!!dummy_comment_service
     ~post_params:(string "author" ** string "url" ** string "body")
