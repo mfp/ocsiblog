@@ -28,7 +28,6 @@ let rss_title = ref "eigenclass"
 let rss_link = ref "http://eigenclass.org"
 let rss_description = ref !rss_title
 let rss_nitems = ref 10
-let port = 80
 let encoding = ref "UTF-8"
 let css_uri = uri_of_string "/R2/ocsiblog.css"
 let loading_icon = "/R2/loading.gif"
@@ -77,11 +76,8 @@ let maybe_ul ?a = function
 let format_date t = Netdate.format "%d %B %Y" (Netdate.create t)
 let format_date_time t = Netdate.format "%d %B %Y at %R" (Netdate.create t)
 
-let abs_service_uri service ~sp params =
-  make_full_uri ~sp ~port ~service params
-
 let abs_service_link service ~sp desc params =
-  XHTML.M.a ~a:[a_href (abs_service_uri service ~sp params)] desc
+  XHTML.M.a ~a:[a_href (make_full_uri service sp params)] desc
 
 let map_body_uri ~relative ~broken ~not_relative uri =
   try
@@ -115,7 +111,7 @@ and render_link_aux ~link_attachment ~link_page href =
         uri
 
 and make_rss_link ?(type_="application/rss+xml") sp serv title =
-  link ~a:[a_href (abs_service_uri serv ~sp ""); a_rel [`Alternate];
+  link ~a:[a_href (make_full_uri serv sp ""); a_rel [`Alternate];
            a_title title; a_type type_] ()
 
 and rss2_link sp = make_rss_link sp rss2_service !rss_title
@@ -138,7 +134,7 @@ and get_rss_items sp tags =
   in
     List.map
       (fun node ->
-         let link = string_of_uri (abs_service_uri page_service ~sp (Node.name node))
+         let link = string_of_uri (make_full_uri page_service sp (Node.name node))
          in Rss.make_item ~title:(Node.title node) ~link
            ~pubDate:(Node.date node) ~guid:(link, true)
            ~description:(render_node_for_rss ~sp node) ())
@@ -278,7 +274,7 @@ and render_node_for_rss ~sp node =
             ~not_relative:(fun _ -> XHTML.M.img ~src:(uri_of_string uri) ~alt ())
             ~relative:(fun p f ->
                          XHTML.M.img
-                           ~src:(abs_service_uri attachment_service ~sp (p, f))
+                           ~src:(make_full_uri attachment_service sp (p, f))
                            ~alt ())
             ~broken:(fun _ -> pcdata alt)
             uri
@@ -368,7 +364,7 @@ let () =
          (Rss.make
             ~title:!rss_title
             ~link:!rss_link
-            ~self_link:(string_of_uri (abs_service_uri rss2_service ~sp taglist))
+            ~self_link:(string_of_uri (make_full_uri rss2_service sp taglist))
             ~description:!rss_description
             ~ttl:180
             (get_rss_items sp (String.nsplit taglist ","))))
