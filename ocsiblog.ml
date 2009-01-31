@@ -6,7 +6,6 @@ open XHTML.M
 open Eliom_predefmod.Xhtmlcompact
 open ExtString
 open ExtList
-
 module Pages = Catalog.Make(Node)
 module SM = Simple_markup
 
@@ -46,8 +45,21 @@ let jquery_js = js_script_ext "http://ajax.googleapis.com/ajax/libs/jquery/1.3/j
 let pages = Pages.make !pagedir
 let comments = Comments.make !commentdir
 
+module Ocsiblog(Dummy : sig end) = struct
+
+let serv = Eliom_services.new_service
+let page_service = serv ["writings"] (suffix (string "page")) ()
+let attachment_service = serv ["files"] (suffix (string "page" ** string "file")) ()
+let toplevel_service = serv [""] unit ()
+let post_comment_service =
+  Eliom_services.new_post_coservice page_service
+    (string "author" ** string "url" ** string "body") ()
+let preview_comment_service =
+  Eliom_services.new_post_service page_service (string "preview_body") ()
+let rss1_service = serv ["feeds"; "rss1"] (suffix (string "tags")) ()
+let rss2_service = serv ["feeds"; "rss2"] (suffix (string "tags")) ()
+
 let not_found () = raise Eliom_common.Eliom_404
-let (!!) = Lazy.force
 
 let attachment_file page basename =
   String.join "/" [!pagedir; page ^ ".files"; basename]
@@ -66,7 +78,7 @@ let format_date t = Netdate.format "%d %B %Y" (Netdate.create t)
 let format_date_time t = Netdate.format "%d %B %Y at %R" (Netdate.create t)
 
 let abs_service_uri service ~sp params =
-  make_full_uri ~sp ~port ~service:!!service params
+  make_full_uri ~sp ~port ~service params
 
 let abs_service_link service ~sp desc params =
   XHTML.M.a ~a:[a_href (abs_service_uri service ~sp params)] desc
@@ -81,7 +93,15 @@ let map_body_uri ~relative ~broken ~not_relative uri =
           relative page file
       | _ -> (* broken relative link *) broken uri
 
-let render_link_aux ~link_attachment ~link_page href =
+let rec page_with_title sp thetitle thebody =
+  let html =
+    (html
+       (head (title (pcdata thetitle)) [css_link css_uri (); ctype_meta; rss2_link sp; jquery_js])
+       (body (thebody @ analytics))) in
+  let txt = Xhtmlcompact_lite.xhtml_print ~version:`HTML_v04_01 ~html_compat:true html
+  in return (txt, "text/html")
+
+and render_link_aux ~link_attachment ~link_page href =
   let uri = href.SM.href_target in
   let desc = pcdata href.SM.href_desc in
     if Node.is_inner_link uri then begin
@@ -93,131 +113,6 @@ let render_link_aux ~link_attachment ~link_page href =
         ~relative:(fun page file -> link_attachment [desc] (page, file))
         ~broken:(fun _ -> pcdata (href.SM.href_desc ^ " (" ^ uri ^ ")"))
         uri
-
-let rec page_with_title sp thetitle thebody =
-  let html =
-    (html
-       (head (title (pcdata thetitle)) [css_link css_uri (); ctype_meta; rss2_link sp; jquery_js])
-       (body (thebody @ analytics))) in
-  let txt = Xhtmlcompact_lite.xhtml_print ~version:`HTML_v04_01 ~html_compat:true html
-  in return (txt, "text/html")
-
-and page_service =
-  lazy (Eliom_predefmod.Text.register_new_service
-          ~path:["writings"] ~get_params:(suffix (string "page")) serve_page)
-
-and serve_page sp page () = match Pages.get_entry pages page with
-    None -> not_found ()
-  | Some node ->
-      let thetitle = Node.title node in
-      let toplink = a ~service:!!toplevel_service ~sp [pcdata !toplevel_link] ()
-      in page_with_title sp thetitle
-           [div_with_id "article_body"
-              (div_with_id "header"
-                 [h1 [a ~service:!!page_service ~sp [pcdata thetitle] page];
-                  with_class p "date" [pcdata (format_date (Node.date node))];
-                  p [toplink]] ::
-               (node_body_with_comments ~sp node @ [footer]))]
-
-and attachment_service = lazy begin
-  Eliom_predefmod.Files.register_new_service
-    ~path:["files"]
-    ~get_params:(suffix (string "page" ** string "file"))
-    (fun sp (page, file) () ->
-       if not (Pages.has_entry pages page) then not_found ()
-       else
-         match String.nsplit file "/" with
-             [basename] -> return (attachment_file page file)
-           | _ -> not_found ())
-end
-
-and toplevel_service = lazy begin
-  Eliom_predefmod.Text.register_new_service
-    ~path:[""]
-    ~get_params:unit
-    (fun sp () () ->
-       let all = Pages.sorted_entries ~reverse:true `Date pages in
-       let pages = List.take !toplevel_pages (List.filter Node.syndicated all) in
-       let links = List.map (entry_link sp) (List.take !toplevel_links all) in
-         page_with_title sp
-            !toplevel_title
-            [div_with_id "toplevel_body"
-               [div_with_id "main" (List.map (entry_div sp) pages);
-                div_with_id "sidebar" [maybe_ul links; subscribe sp; footer]]])
-end
-
-and subscribe sp =
-  a ~a:[a_class ["subscribe"]] ~service:!!rss2_service ~sp [pcdata "Subscribe"] ""
-
-and dummy_comment_service = lazy begin
-  Eliom_predefmod.Redirection.register_new_service
-    ~path:["post_comment"]
-    ~get_params:(string "page")
-    (fun sp page () -> return (Eliom_services.preapply !!page_service page))
-end
-
-and post_comment_service = lazy begin
-  Eliom_predefmod.String_redirection.register_new_post_coservice
-    ~options:`Permanent
-    ~fallback:!!dummy_comment_service
-    ~post_params:(string "author" ** string "url" ** string "body")
-    (fun sp page (author, (url, body)) ->
-       let uri = make_full_string_uri ~sp ~service:!!page_service page in
-       let ret x = return (uri_of_string x) in
-         if String.strip body = "" then
-           ret uri
-         else
-           try
-             if Pages.has_entry pages page then
-               let url = match url with
-                   "" -> None
-                 | s when Str.string_match (Str.regexp "http://") s 0 -> Some s
-                 | s -> Some ("http://" ^ s) in
-               let c = Comments.add_comment comments page ?url ~author ~body () in
-                 ret (uri ^ "#" ^ comment_id c)
-                 else ret uri (* will 404 in page_service *)
-           with _ -> ret uri)
-end
-
-and preview_comment_service = lazy begin
-  Eliom_predefmod.Blocks.register_new_post_service
-    ~fallback:!!dummy_comment_service
-    ~post_params:(string "preview_body")
-    (fun sp _ body -> return (render_comment_body sp (SM.parse_text body)))
-end
-
-and rss2_service = lazy begin
-  Eliom_predefmod.Text.register_new_service
-    ~path:["feeds"; "rss2"]
-    ~get_params:(suffix (string "tags"))
-    (fun sp taglist () ->
-       generate_xml
-         (Rss.make
-            ~title:!rss_title
-            ~link:!rss_link
-            ~self_link:(string_of_uri (abs_service_uri rss2_service ~sp taglist))
-            ~description:!rss_description
-            ~ttl:180
-            (get_rss_items sp (String.nsplit taglist ","))))
-end
-
-and rss1_service = lazy begin
-  Eliom_predefmod.Text.register_new_service
-    ~path:["feeds"; "rss1"]
-    ~get_params:(suffix (string "tags"))
-    (fun sp taglist () ->
-       let items = get_rss_items sp (String.nsplit taglist ",") in
-       let max_f (a : float) b = if a > b then a else b in
-       let date = match List.filter_map Rss.item_date items with
-           [] -> Unix.gettimeofday ()
-         | hd::tl -> List.fold_left max_f hd tl
-       in generate_xml (Rss.make_rdf
-                          ~title:!rss_title
-                          ~link:!rss_link
-                          ~description:!rss_description
-                          ~date
-                          items))
-end
 
 and make_rss_link ?(type_="application/rss+xml") sp serv title =
   link ~a:[a_href (abs_service_uri serv ~sp ""); a_rel [`Alternate];
@@ -255,7 +150,7 @@ and node_body_with_comments ~sp node =
   let body = render_node sp node (Node.markup node) in
   let cs = Option.default [] (Comments.get_comments comments page) in
   let comment_form = match allow_comments with
-      true -> [ post_form !!post_comment_service sp (comment_form sp page) page ]
+      true -> [ post_form post_comment_service sp (comment_form sp page) page ]
     | false -> [] in
   let comments_div = match cs, allow_comments with
       [], false -> []
@@ -285,7 +180,7 @@ and render_img sp img =
     map_body_uri
       ~relative:(fun p f ->
                   mk_img
-                    (make_uri ~service:!!attachment_service ~sp (p, f))
+                    (make_uri ~service:attachment_service ~sp (p, f))
                     img.SM.img_alt)
       ~not_relative:(fun _ -> mk_img (uri_of_string img.SM.img_src) img.SM.img_alt)
       ~broken:pcdata
@@ -293,8 +188,8 @@ and render_img sp img =
 
 and render_link sp href =
   render_link_aux
-    ~link_page:(a ~service:!!page_service ~sp)
-    ~link_attachment:(a ~service:!!attachment_service ~sp)
+    ~link_page:(a ~service:page_service ~sp)
+    ~link_attachment:(a ~service:attachment_service ~sp)
     href
 
 and format_comments ~sp l = match List.fast_sort (Comments.compare `Date) l with
@@ -351,8 +246,7 @@ and comment_form sp page (author_name, (url_name, body_name)) =
        });
      });"
      loading_icon
-     (* use magic to address issue with service type (f not general enough) *)
-    (string_of_uri (make_uri (Obj.magic !!dummy_comment_service) sp page));
+    (string_of_uri (make_uri page_service sp page));
    div_with_id "comment_preview" ~a:[a_class ["comment"]] []]
 
 and entry_div sp node =
@@ -367,7 +261,7 @@ and entry_div sp node =
 and entry_link sp node = li [ link_to_node sp node ]
 
 and link_to_node sp node =
-  a ~service:!!page_service ~sp [pcdata (Node.title node)] (Node.name node)
+  a ~service:page_service ~sp [pcdata (Node.title node)] (Node.name node)
 
 and render_node_for_rss ~sp node =
   let html =
@@ -399,26 +293,109 @@ and html_summary ?(absolute = true) ~sp node l =
           XML.Comment s when String.strip s = "/syndicate" ->
             let mklink = match absolute with
               | true -> abs_service_link page_service ~sp
-              | false -> fun x page -> a ~service:!!page_service ~sp x page in
+              | false -> fun x page -> a ~service:page_service ~sp x page in
             let link = p [mklink [pcdata "Read more..."] (Node.name node)] in
               List.rev (link :: acc)
         | _ -> loop (hd :: acc) tl
   in loop [] l
 
-let rec reload_pages () =
-  printf "[%s] reloading pages\n%!" (Netdate.mk_mail_date (Unix.gettimeofday ()));
-  Pages.refresh pages;
-  Lwt_unix.sleep !refresh_period >>= fun () -> reload_pages ()
+let serve_page sp page () = match Pages.get_entry pages page with
+    None -> not_found ()
+  | Some node ->
+      let thetitle = Node.title node in
+      let toplink = a ~service:toplevel_service ~sp [pcdata !toplevel_link] ()
+      in page_with_title sp thetitle
+           [div_with_id "article_body"
+              (div_with_id "header"
+                 [h1 [a ~service:page_service ~sp [pcdata thetitle] page];
+                  with_class p "date" [pcdata (format_date (Node.date node))];
+                  p [toplink]] ::
+               (node_body_with_comments ~sp node @ [footer]))]
 
-let init x = ignore !!x
+let () = Eliom_predefmod.Text.register page_service serve_page
+
+let () = Eliom_predefmod.Files.register attachment_service
+           (fun sp (page, file) () ->
+              if not (Pages.has_entry pages page) then not_found ()
+              else
+                match String.nsplit file "/" with
+                    [basename] -> return (attachment_file page file)
+                  | _ -> not_found ())
+
+let subscribe sp =
+  a ~a:[a_class ["subscribe"]] ~service:rss2_service ~sp [pcdata "Subscribe"] ""
+
+let () =
+  Eliom_predefmod.Text.register toplevel_service
+    (fun sp () () ->
+       let all = Pages.sorted_entries ~reverse:true `Date pages in
+       let pages = List.take !toplevel_pages (List.filter Node.syndicated all) in
+       let links = List.map (entry_link sp) (List.take !toplevel_links all) in
+         page_with_title sp
+            !toplevel_title
+            [div_with_id "toplevel_body"
+               [div_with_id "main" (List.map (entry_div sp) pages);
+                div_with_id "sidebar" [maybe_ul links; subscribe sp; footer]]])
+
+let () =
+  Eliom_predefmod.String_redirection.register
+    ~options:`Permanent ~service:post_comment_service
+    (fun sp page (author, (url, body)) ->
+       let uri = make_full_string_uri ~sp ~service:page_service page in
+       let ret x = return (uri_of_string x) in
+         if String.strip body = "" then
+           ret uri
+         else
+           try
+             if Pages.has_entry pages page then
+               let url = match url with
+                   "" -> None
+                 | s when Str.string_match (Str.regexp "http://") s 0 -> Some s
+                 | s -> Some ("http://" ^ s) in
+               let c = Comments.add_comment comments page ?url ~author ~body () in
+                 ret (uri ^ "#" ^ comment_id c)
+                 else ret uri (* will 404 in page_service *)
+           with _ -> ret uri)
+
+let () =
+  Eliom_predefmod.Blocks.register preview_comment_service
+    (fun sp _ body -> return (render_comment_body sp (SM.parse_text body)))
+
+let () =
+  Eliom_predefmod.Text.register rss2_service
+    (fun sp taglist () ->
+       generate_xml
+         (Rss.make
+            ~title:!rss_title
+            ~link:!rss_link
+            ~self_link:(string_of_uri (abs_service_uri rss2_service ~sp taglist))
+            ~description:!rss_description
+            ~ttl:180
+            (get_rss_items sp (String.nsplit taglist ","))))
+
+let () =
+  Eliom_predefmod.Text.register rss1_service
+    (fun sp taglist () ->
+       let items = get_rss_items sp (String.nsplit taglist ",") in
+       let max_f (a : float) b = if a > b then a else b in
+       let date = match List.filter_map Rss.item_date items with
+           [] -> Unix.gettimeofday ()
+         | hd::tl -> List.fold_left max_f hd tl
+       in generate_xml (Rss.make_rdf
+                          ~title:!rss_title
+                          ~link:!rss_link
+                          ~description:!rss_description
+                          ~date
+                          items))
+end (* Ocsiblog *)
+
+let reload_pages =
+  let rec loop () =
+    printf "[%s] reloading pages\n%!" (Netdate.mk_mail_date (Unix.gettimeofday ()));
+    Pages.refresh pages; Lwt_unix.sleep !refresh_period >>= fun () -> loop () in
+  let once = lazy (loop ()) in (* so only done once *)
+   fun () -> ignore (Lazy.force once)
 
 let () =
   Eliom_services.register_eliom_module "ocsiblog"
-    (fun () -> init page_service;
-               init attachment_service;
-               init toplevel_service;
-               init rss1_service;
-               init rss2_service;
-               init post_comment_service;
-               init preview_comment_service;
-               ignore (reload_pages ()))
+    (fun () -> let module M = Ocsiblog(struct end) in reload_pages ())
