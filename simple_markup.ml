@@ -270,7 +270,7 @@ and scan s st n =
         delimited (fun ~first ~last -> Bold (unescape_slice s ~first ~last)) "*"
           s st n
     | '_' ->
-        delimited (fun ~first ~last -> Emph (unescape_slice s ~first ~last)) "_"
+        delimited (fun ~first ~last -> Emph (unescape_slice s ~first ~last)) "__"
           s st n
     | '=' ->
         delimited

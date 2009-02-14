@@ -82,14 +82,14 @@ let test_read_normal () =
   check
     [Normal
        [Text "foo "; Bold "bar"; Text " "; Bold "baz"; Text " ";
-        Emph "foobar"; Text " ";
+        Emph "foobar"; Text " _foobar_";
         Link { href_target = "target"; href_desc = "desc"};
         Image { img_src = "image"; img_alt = "alt"};
         Text "."]]
-    "foo *bar* *baz* _foobar_ [desc](target)![alt](image).";
+    "foo *bar* *baz* __foobar__ _foobar_[desc](target)![alt](image).";
   check
-    [Normal [Bold "foo"; Text " "; Struck [Bold "foo"; Emph "bar"]]]
-    "*foo* ==*foo*_bar_==";
+    [Normal [Bold "foo"; Text " "; Struck [Bold "foo"; Emph "bar"; Text "_baz_"]]]
+    "*foo* ==*foo*__bar___baz_==";
   check
     [Normal
        [Link { href_target = "http://foo.com"; href_desc = "http://foo.com" }]]
@@ -104,6 +104,7 @@ let test_read_normal () =
 let test_read_normal_unmatched () =
   check [Normal [Text "foo * bar"]] "foo * bar";
   check [Normal [Text "foo _ bar"]] "foo _ bar";
+  check [Normal [Text "foo __ bar"]] "foo __ bar";
   check [Normal [Text "foo == bar"]] "foo == bar";
   check [Normal [Text "foo == bar"]; Normal [Text "baz =="]] "foo == bar\n\nbaz =="
 
@@ -149,7 +150,7 @@ let test_quote () =
   check [Normal [Text "foo says:"];
          Quote [Normal [Text "xxx:"];
                 Ulist ([Normal [Text "xxx yyy"]],
-                       [[Normal [Emph "2"]]; [Normal [Bold "3"]]]);
+                       [[Normal [Emph "2"]]; [Normal [Text "_2_"]]; [Normal [Bold "3"]]]);
                 Quote [Normal [Text "yyy"]; Quote [Normal [Text "zzz"]];
                        Normal [Text "aaa"]]]]
     "foo says:\n\
@@ -157,6 +158,7 @@ let test_quote () =
      > xxx:\n\
      > * xxx\n\
      >   yyy\n\
+     > * __2__\n\
      > * _2_\n\
      > * *3*\n\
      > > yyy\n\
