@@ -305,7 +305,7 @@ let serve_page sp page () = match Pages.get_entry pages page with
               (div_with_id "header"
                  [h1 [a ~service:page_service ~sp [pcdata thetitle] page];
                   with_class p "date" [pcdata (format_date (Node.date node))];
-                  p [toplink]] ::
+                  p [toplink; br (); a rss2_service sp [pcdata "Subscribe"] ""]] ::
                (node_body_with_comments ~sp node @ [footer]))]
 
 let () = Eliom_predefmod.Text.register page_service serve_page
