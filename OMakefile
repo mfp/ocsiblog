@@ -44,7 +44,6 @@ EXE_FILES[] =
     node
     rss
     comments
-    xhtmlcompact_lite
     ocsiblog
     ocsiblog_main
 

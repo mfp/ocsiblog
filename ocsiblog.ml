@@ -94,7 +94,7 @@ let rec page_with_title sp thetitle thebody =
     (html
        (head (title (pcdata thetitle)) [css_link css_uri (); ctype_meta; rss2_link sp; jquery_js])
        (body (thebody @ analytics))) in
-  let txt = Xhtmlcompact_lite.xhtml_print ~version:`HTML_v04_01 ~html_compat:true html
+  let txt = Xhtmlcompact.xhtml_print ~version:`HTML_v04_01 ~html_compat:true html
   in return (txt, "text/html")
 
 and render_link_aux ~link_attachment ~link_page href =
@@ -280,7 +280,7 @@ and render_node_for_rss ~sp node =
             uri
       end
       (Node.markup node)
-  in Xhtmlcompact_lite.xhtml_list_print ~html_compat:true (html_summary ~sp node html)
+  in Xhtmlcompact.xhtml_list_print ~html_compat:true (html_summary ~sp node html)
 
 and html_summary ?(absolute = true) ~sp node l =
   let rec loop acc = function
