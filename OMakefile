@@ -13,6 +13,7 @@ CamlSources(mods) =
 
 
 OCAMLPACKS[] =
+   ocsigen.parsecommandline
    ocsigen.server
    ocsigen.ext.ocsipersist-sqlite
    ocsigen.ext.eliom
