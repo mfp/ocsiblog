@@ -11,6 +11,11 @@ CamlSources(mods) =
 	$(mapprefix -I, $(OCAMLINCLUDES)) \
 	$(OCAMLFLAGS) $(OCAMLCFLAGS) -i $< > $@
 
+SM_PACKS[] =
+    ocsigen.xhtml
+    extlib
+    str
+    camlp4.foldgenerator
 
 OCAMLPACKS[] =
    ocsigen.parsecommandline
@@ -18,11 +23,7 @@ OCAMLPACKS[] =
    ocsigen.ext.ocsipersist-sqlite
    ocsigen.ext.eliom
    ocsigen.ext.staticmod
-   ocsigen.xhtml
-   extlib
-   str
-   lwt
-   camlp4.foldgenerator
+   $(SM_PACKS)
 
 PP = -syntax camlp4o
 OCAMLFLAGS += -g -thread -dtypes $(PP)
@@ -34,7 +35,7 @@ TESTS[] =
    test_simple_markup
 
 section
-    OCAMLPACKS[] += oUnit
+    OCAMLPACKS[] = $(SM_PACKS) oUnit
     CamlSources(run_tests test_simple_markup)
     OCamlProgram(run_tests, $(TESTS) run_tests)
 
