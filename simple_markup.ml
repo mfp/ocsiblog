@@ -3,6 +3,8 @@ open Printf
 open ExtString
 open ExtList
 
+TYPE_CONV_PATH "Simple_markup"
+
 type ref = { src : string; desc : string }
 
 type paragraph =
@@ -25,80 +27,18 @@ and text =
   | Anchor of string
   | Image of img_ref
 
-and href = {
-  href_target : string;
-  href_desc : string;
-}
+and href = { href_target : string; href_desc : string; }
 
-and img_ref = {
-  img_src : string;
-  img_alt : string;
-}
+and img_ref = { img_src : string; img_alt : string; }
+
+and par_list = paragraph list with sexp
 
 class fold = Camlp4Filters.GenerateFold.generated
 
-type parse_state = {
-  max : int;
-  current : Buffer.t;
-  fragments : text list;
-}
+type parse_state = { max : int; current : Buffer.t; fragments : text list; }
 
-module PP =
-struct
-  open Format
-
-  let rec fprintfs sep f pp = function
-      [] -> ()
-    | [x] -> fprintf pp "%a" f x
-    | x::l -> fprintf pp ("%a" ^^ sep ^^ "%a") f x (fprintfs sep f) l
-
-  let pp_list f pp l =
-    let pr_elems = fprintfs ";@ " f in
-      fprintf pp "[@[<1>@ %a@ @]]" pr_elems l
-
-  let pp_option f pp = function
-      None -> fprintf pp "None"
-    | Some x -> fprintf pp "Some %a" f x
-
-  let pp_string fmt s = fprintf fmt "%S" s
-
-  let rec pp_paragraph fmt = function
-      Normal text -> fprintf fmt "@[<2>Normal@ %a@]" pp_par_text text
-    | Pre (s, kind) -> fprintf fmt "@[<2>Pre@ (@[%S,@ %a)@]@]"
-                         s (pp_option pp_string) kind
-    | Heading (lev, text) -> fprintf fmt "@[<2>Heading@ (@[%d,@ %a)@]@]"
-                               lev pp_par_text text
-    | Quote ps -> fprintf fmt "@[<2>Quote@ %a@]" (pp_list pp_paragraph) ps
-    | Ulist (l, ls) ->
-        fprintf fmt "@[<2>Ulist@ (@[%a,@ %a)@]@]"
-          (pp_list pp_paragraph) l (pp_list (pp_list pp_paragraph)) ls
-    | Olist (l, ls) ->
-        fprintf fmt "@[<2>Olist@ (@[%a,@ %a)@]@]"
-          (pp_list pp_paragraph) l (pp_list (pp_list pp_paragraph)) ls
-
-  and pp_par_text fmt = pp_list pp_text fmt
-
-  and pp_text fmt = function
-      Text s -> fprintf fmt "@[<2>Text@ %S@]" s
-    | Emph s -> fprintf fmt "@[<2>Emph@ %S@]" s
-    | Bold s -> fprintf fmt "@[<2>Bold@ %S@]" s
-    | Code s -> fprintf fmt "@[<2>Code@ %S@]" s
-    | Struck txt -> fprintf fmt "@[<2>Struck@ %a@]" pp_par_text txt
-    | Anchor s -> fprintf fmt "@[<2>Anchor@ %S@]" s
-    | Link href ->
-        fprintf fmt "@[<2>Link@ {@[target=%S,@ %S}@]@]" href.href_target href.href_desc
-    | Image img ->
-        fprintf fmt "@[<2>Image@ {@[src=%S,@ %S}@]@]" img.img_src img.img_alt
-
-  let pp f x =
-    let b = Buffer.create 16 in
-    let pp = formatter_of_buffer b in
-      fprintf pp "%a@?" f x;
-      Buffer.contents b;;
-end
-
-let string_of_paragraph = PP.pp PP.pp_paragraph
-let string_of_paragraphs = PP.pp (PP.pp_list PP.pp_paragraph)
+let string_of_paragraph p = Sexplib.Sexp.to_string_hum (sexp_of_paragraph p)
+let string_of_paragraphs ps = Sexplib.Sexp.to_string_hum (sexp_of_par_list ps)
 
 let indentation ?(ts=8) s =
   let rec loop n indent max =

@@ -16,6 +16,7 @@ SM_PACKS[] =
     extlib
     str
     camlp4.foldgenerator
+    sexplib.syntax
 
 OCAMLPACKS[] =
    ocsigen.parsecommandline
