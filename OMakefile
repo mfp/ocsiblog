@@ -22,8 +22,9 @@ OCAMLPACKS[] =
    extlib
    str
    lwt
+   camlp4.foldgenerator
 
-PP = -pp "camlp4o Camlp4FoldGenerator.cmo"
+PP = -syntax camlp4o
 OCAMLFLAGS += -g -thread -dtypes $(PP)
 OCAMLOPTFLAGS += -inline 100
 OCAMLDEPFLAGS += $(PP)
