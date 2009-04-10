@@ -77,45 +77,42 @@ let push_remainder ?(first=2) indent s e =
   let s' = String.strip s in
     Enum.push e (indent + first + indentation s, s', s' = "")
 
-let adds = Buffer.add_string
-
-let addc = Buffer.add_char
-
 let new_fragment () = Buffer.create 8
+let adds = Buffer.add_string
+let addc = Buffer.add_char
 
 let push_current st =
   if Buffer.length st.current > 0 then
     Text (Buffer.contents st.current) :: st.fragments
   else st.fragments
 
-let rec read_paragraph ?(skip_blank=true) indent e = match Enum.peek e with
+let rec read_paragraph indent e = match Enum.peek e with
     None -> None
   | Some (indentation, line, isblank) -> match isblank with
-        true ->
-          Enum.junk e;
-          if skip_blank then read_paragraph indent e else None
+        true -> Enum.junk e; read_paragraph indent e
       | false ->
           if indentation < indent then
             None
           else begin
             Enum.junk e;
-            read_nonempty indentation e line
+            read_nonempty ~prev_indent:indent indentation e line
           end
 
 and skip_blank_line e = match Enum.peek e with
     None | Some (_, _, false) -> ()
   | Some (_, _, true) -> Enum.junk e; skip_blank_line e
 
-and read_nonempty indent e s = match s.[0] with
-    '#' -> read_heading s
+and read_nonempty ~prev_indent indent e s = match s.[0] with
+  | _ when indent >= prev_indent + 4 ->
+      Enum.push e (indent, s, false); read_pre prev_indent e
+  | '#' -> read_heading s
   | c when is_ul_char c && snd_is_space s ->
       push_remainder indent s e; read_ul indent e
-  | '{' when snd_is s '{' -> read_pre (String.slice s ~first:2) e
   | '>' when snd_is_space s || s = ">" ->
       (* last check needed because "> " becomes ">" *)
       Enum.push e (indent, s, false); read_quote indent e
   | _ -> match list_nth_offset s with
-        None -> Enum.push e (indent, s, false); read_normal e
+        None -> Enum.push e (indent, s, false); read_normal prev_indent e
       | Some n -> push_remainder ~first:n indent s e; read_ol indent e
 
 and read_heading s =
@@ -147,26 +144,17 @@ and read_list f item_indent indent e =
               None -> f fst (List.rev others)
             | Some n -> Enum.junk e;
                         push_remainder ~first:n indentation s e;
-                        read_all fst (read_item indentation [] :: others))
+                        read_all fst (read_item (indentation + n - 1) [] :: others))
       | None | Some _ -> f fst (List.rev others)
   in Some (read_all (read_item indent []) [])
 
-and read_pre kind e =
-  let kind = match kind with "" -> None | s -> Some s in
-  let re = Str.regexp "^\\\\+}}$" in
-  let unescape = function
-      s when Str.string_match re s 0 -> String.slice ~first:1 s
-    | s -> s in
-  (*  don't forget the last \n *)
-  let ret ls = Some (Pre (String.concat "\n" (List.rev ("" :: ls)), kind)) in
-  let rec read_until_end fstindent ls = match Enum.get e with
-      None | Some (_, "}}", _) -> ret ls
-    | Some (indentation, s, _) ->
-        let spaces = String.make (max 0 (indentation - fstindent)) ' ' in
-          read_until_end fstindent ((spaces ^ unescape s) :: ls)
-  in match Enum.get e with
-      None | Some (_, "}}", _) -> ret []
-    | Some (indentation, s, _) -> read_until_end indentation [s]
+and read_pre prev_indent e =
+  let rec loop lines e = match Enum.peek e with
+      Some (indentation, s, _) when indentation >= prev_indent + 4 ->
+        Enum.junk e;
+        loop ((String.make (indentation - prev_indent - 4) ' ' ^ s) :: lines) e
+    | _ -> Some (Pre (String.concat "\n" (List.rev ("" :: lines)), None))
+  in loop [] e
 
 and read_quote indent e =
   let push_and_finish e elm = Enum.push e elm; raise Enum.No_more_elements in
@@ -184,19 +172,18 @@ and read_quote indent e =
       [] -> None
     | ps -> Some (Quote ps)
 
-and read_normal e =
-  let rec gettxt ls =
+and read_normal prev_indent e =
+  let rec gettxt prev_indent ls =
     let return () = String.concat " " (List.rev ls) in
     match Enum.peek e with
-      None | Some (_, _, true) -> return ()
-    | Some (_, l, _) -> match l.[0] with
-            '#' | '>' when snd_is_space l -> return ()
+        None | Some (_, _, true) -> return ()
+      | Some (indent, l, _) -> match l.[0] with
+          | _ when indent >= prev_indent + 4 -> return ()
+          | '#' | '>' when snd_is_space l -> return ()
           | c when is_ul_char c && snd_is_space l -> return ()
-          | '{' when snd_is l '{' -> return ()
           | _ when is_list_nth l -> return ()
-          | _ -> Enum.junk e; gettxt (l :: ls) in
-  let txt = gettxt [] in
-    Some (Normal (parse_text txt))
+          | _ -> Enum.junk e; gettxt indent (l :: ls)
+  in Some (Normal (parse_text (gettxt prev_indent [])))
 
 and parse_text s =
   scan s { max = String.length s; fragments = []; current = new_fragment (); } 0

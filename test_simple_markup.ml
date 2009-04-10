@@ -17,7 +17,7 @@ let check expected input =
 let test_read_list () =
   check
     [Ulist ([Normal [Text "foo "; Emph "bar"]], [[Normal [Text "baz"]]])]
-    "* foo\n*bar*\n* baz";
+    "* foo\n  *bar*\n* baz";
   check
     [Ulist ([Normal [Text "foo bar baz"]], [[Normal [Text "baz"]]])]
     "* foo\nbar \n   baz\n* baz";
@@ -30,6 +30,9 @@ let test_read_list () =
   check
     [Ulist ([Normal [Text "foo"]], [[Normal [Text "bar"]]])]
     "* foo\n* bar";
+  check
+    [Ulist ([Normal [Text "foo"]], [[Normal [Text "bar"]]])]
+    "+ foo\n+ bar\n";
   check
     [Ulist ([Normal [Text "foo"]], [[Normal [Text "bar"]]])]
     "* foo\n\n* bar";
@@ -53,13 +56,13 @@ let test_read_list () =
        ([Normal [Text "some paragraph"]; Normal [Text "And another one."]],
         [[Normal [Text "two"]]; [Normal [Text "three"]]])]
     "
-     *   some
-         paragraph
+ *   some
+     paragraph
 
-         And another one.
+     And another one.
 
-     *   two
-     *   three
+ *   two
+ *   three
     ";
   check
     [Ulist ([Normal [Text "foo "; Bold "bar baz"]; Normal [Text "xxx"]],
@@ -72,9 +75,9 @@ let test_read_list () =
     [Olist ([Normal [Text "one"]],
             [[Normal [Text "two"]]; [Normal [Text "three"]]])]
     "
-     1.\tone
-     2.\ttwo
-     0.\tthree"
+1.\tone
+2.\ttwo
+0.\tthree"
 
 let test_read_olist () =
   check
@@ -82,11 +85,11 @@ let test_read_olist () =
      Olist ([Normal [Text "one"]],
             [[Normal [Text "two"]]; [Normal [Text "bar"]]; [Normal [Text "three"]]])]
     "
-     foo:
-     1.\tone
-     2. \ttwo
-     3. bar
-     999.\tthree"
+foo:
+   1.\tone
+   2.\ttwo
+   3. bar
+   999.\tthree"
 
 let test_read_normal () =
   check [Normal [Text "foo "; Struck [Text " bar baz "]; Text " foobar"]]
@@ -124,30 +127,26 @@ let test_read_pre () =
   check
     [Normal [Text "foo * bar"];
      Pre("a\n b\n  c\n", None);
-     Pre("a\\0\\1\\2\n b\n  c\n", Some "whatever")]
-    "foo * bar\n{{\na\n b\n  c\n}}\n\n{{whatever\na\\0\\1\\2\n b\n  c\n}}\n  ";
+     Normal [Text "foo"];
+     Pre("a\\0\n b\\1\n  c\n", None)]
+"foo * bar
+    a
+     b
+      c
+foo
+    a\\0
+     b\\1
+      c
+";
   check
-    [Pre("a\n b\n  c\n", Some "foobar")]
-    "{{foobar
-     a
-      b
-       c
-     }}";
-  check
-    [Pre("a\n b\n  c\n", Some "foo")]
-    "  {{foo
-         a
-          b
-           c
-         }}";
-  check
-    [Pre("a\n }}\n  \\}}\n   }}}\n", None)]
-    "{{
-       a
-        \\}}
-         \\\\}}
-          }}}
-     }}"
+    [Normal [Text "foo:"]; Pre("a\n b\n  c\n", None);
+     Normal [Text "bar"]]
+"foo:
+    a
+     b
+      c
+bar
+"
 
 let test_heading () =
   for i = 1 to 6 do
