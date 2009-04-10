@@ -16,7 +16,7 @@ let check expected input =
 
 let test_read_list () =
   check
-    [Ulist ([Normal [Text "foo "; Bold "bar"]], [[Normal [Text "baz"]]])]
+    [Ulist ([Normal [Text "foo "; Emph "bar"]], [[Normal [Text "baz"]]])]
     "* foo\n*bar*\n* baz";
   check
     [Ulist ([Normal [Text "foo bar baz"]], [[Normal [Text "baz"]]])]
@@ -42,12 +42,12 @@ let test_read_list () =
              Olist ([Normal [Text "1"]], [[Normal [Text "2"]]])],
             []);
      Olist ([Normal [Text "3"]], [])]
-    "* foo\n\n * bar\n # 1\n # 2\n# 3";
+    "* foo\n\n * bar\n 1. 1\n 1. 2\n1. 3";
   check
     [Ulist ([Normal [Text "foo"]; Ulist ([Normal [Text "bar"]], []);
-             Olist ([Normal [Text "1"]], [[Normal [Text "2 #3"]]])],
+             Olist ([Normal [Text "1"]], [[Normal [Text "2 1.3"]]])],
             [])]
-    "* foo\n\n * bar\n # 1\n # 2\n#3";
+    "* foo\n\n * bar\n 1. 1\n 1. 2\n1.3";
   check
     [Ulist
        ([Normal [Text "some paragraph"]; Normal [Text "And another one."]],
@@ -64,7 +64,7 @@ let test_read_list () =
   check
     [Ulist ([Normal [Text "foo "; Bold "bar baz"]; Normal [Text "xxx"]],
             [[Normal [Text "baz"]]])]
-    "*\tfoo\n*bar\n baz*\n\n xxx\n\n* baz";
+    "*\tfoo\n**bar\n baz**\n\n xxx\n\n* baz";
   check
     [Normal [Text "foo"]; Ulist ([Normal [Text "bar"]], [])]
     "foo\n*\tbar";
@@ -72,9 +72,21 @@ let test_read_list () =
     [Olist ([Normal [Text "one"]],
             [[Normal [Text "two"]]; [Normal [Text "three"]]])]
     "
-     #\tone
-     #\ttwo
-     #\tthree"
+     1.\tone
+     2.\ttwo
+     0.\tthree"
+
+let test_read_olist () =
+  check
+    [Normal [Text "foo:"];
+     Olist ([Normal [Text "one"]],
+            [[Normal [Text "two"]]; [Normal [Text "bar"]]; [Normal [Text "three"]]])]
+    "
+     foo:
+     1.\tone
+     2. \ttwo
+     3. bar
+     999.\tthree"
 
 let test_read_normal () =
   check [Normal [Text "foo "; Struck [Text " bar baz "]; Text " foobar"]]
@@ -82,14 +94,14 @@ let test_read_normal () =
   check
     [Normal
        [Text "foo "; Bold "bar"; Text " "; Bold "baz"; Text " ";
-        Emph "foobar"; Text " _foobar_";
+        Emph "foobar"; Text " "; Emph "foobar";
         Link { href_target = "target"; href_desc = "desc"};
         Image { img_src = "image"; img_alt = "alt"};
         Text "."]]
-    "foo *bar* *baz* __foobar__ _foobar_[desc](target)![alt](image).";
+    "foo **bar** __baz__ _foobar_ *foobar*[desc](target)![alt](image).";
   check
-    [Normal [Bold "foo"; Text " "; Struck [Bold "foo"; Emph "bar"; Text "_baz_"]]]
-    "*foo* ==*foo*__bar___baz_==";
+    [Normal [Bold "foo"; Text " "; Struck [Bold "foo"; Emph "bar"; Text "baz_"]]]
+    "**foo** ==**foo**_bar_baz_==";
   check
     [Normal
        [Link { href_target = "http://foo.com"; href_desc = "http://foo.com" }]]
@@ -141,7 +153,7 @@ let test_heading () =
   for i = 1 to 6 do
     check
       [Heading (i, [Text "foo "; Link { href_target = "dst"; href_desc = "foo" }])]
-    (String.make i '!' ^ "foo [foo](dst)")
+    (String.make i '#' ^ "foo [foo](dst)")
   done
 
 let test_quote () =
@@ -150,7 +162,7 @@ let test_quote () =
   check [Normal [Text "foo says:"];
          Quote [Normal [Text "xxx:"];
                 Ulist ([Normal [Text "xxx yyy"]],
-                       [[Normal [Emph "2"]]; [Normal [Text "_2_"]]; [Normal [Bold "3"]]]);
+                       [[Normal [Bold "2"]]; [Normal [Emph "2"]]; [Normal [Emph "3"]]]);
                 Quote [Normal [Text "yyy"]; Quote [Normal [Text "zzz"]];
                        Normal [Text "aaa"]]]]
     "foo says:\n\
@@ -179,6 +191,7 @@ let tests = "Simple_markup unit" >:::
     "Normal" >:: test_read_normal;
     "Normal, unmatched delimiters" >:: test_read_normal_unmatched;
     "Ulist and Olist" >:: test_read_list;
+    "Olist with 1." >:: test_read_olist;
     "Pre" >:: test_read_pre;
     "Heading" >:: test_heading;
     "Quote" >:: test_quote;

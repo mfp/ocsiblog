@@ -64,6 +64,7 @@ let unescape_slice s ~first ~last =
 
 let snd_is s c = String.length s > 1 && s.[1] = c
 let snd_is_space s = snd_is s ' ' || snd_is s '\t'
+let is_ul_char = function '*' | '+' | '-' -> true | _ -> false
 
 let collect f x =
   let rec loop acc = match f x with
@@ -106,41 +107,47 @@ and skip_blank_line e = match Enum.peek e with
   | Some (_, _, true) -> Enum.junk e; skip_blank_line e
 
 and read_nonempty indent e s = match s.[0] with
-    '!' -> read_heading s
-  | '*' when snd_is_space s -> push_remainder indent s e; read_ul indent e
-  | '#' when snd_is_space s -> push_remainder indent s e; read_ol indent e
+    '#' -> read_heading s
+  | c when is_ul_char c && snd_is_space s ->
+      push_remainder indent s e; read_ul indent e
   | '{' when snd_is s '{' -> read_pre (String.slice s ~first:2) e
   | '>' when snd_is_space s || s = ">" ->
       (* last check needed because "> " becomes ">" *)
       Enum.push e (indent, s, false); read_quote indent e
-  | _ -> Enum.push e (indent, s, false); read_normal e
+  | _ -> match list_nth_offset s with
+        None -> Enum.push e (indent, s, false); read_normal e
+      | Some n -> push_remainder ~first:n indent s e; read_ol indent e
 
 and read_heading s =
-  let s' = String.strip ~chars:"!" s in
+  let s' = String.strip ~chars:"#" s in
   let level = String.length s - String.length s' in
     Some (Heading (level, parse_text s'))
 
 and read_ul indent e =
   read_list
     (fun fst others -> Ulist (fst, others))
-    (fun s -> snd_is_space s && s.[0] = '*')
+    (fun s -> if snd_is_space s && is_ul_char s.[0] then Some 2 else None)
     indent e
 
 and read_ol indent e =
-  read_list
-    (fun fst others -> Olist (fst, others))
-    (fun s -> snd_is_space s && s.[0] = '#')
-    indent e
+  read_list (fun fst others -> Olist (fst, others)) list_nth_offset indent e
 
-and read_list f is_item indent e =
+and is_list_nth = let re = Str.regexp "^[0-9]+\\.[ \t]" in fun s ->
+  Str.string_match re s 0
+
+and list_nth_offset s = if is_list_nth s then Some (Str.match_end ()) else None
+
+and read_list f item_indent indent e =
   let read_item indent ps = collect (read_paragraph (indent + 1)) e in
   let rec read_all fst others =
     skip_blank_line e;
     match Enum.peek e with
-      | Some (indentation, s, _) when indentation >= indent && is_item s ->
-          Enum.junk e;
-          push_remainder indentation s e;
-          read_all fst (read_item indentation [] :: others)
+      | Some (indentation, s, _) when indentation >= indent ->
+          (match item_indent s with
+              None -> f fst (List.rev others)
+            | Some n -> Enum.junk e;
+                        push_remainder ~first:n indentation s e;
+                        read_all fst (read_item indentation [] :: others))
       | None | Some _ -> f fst (List.rev others)
   in Some (read_all (read_item indent []) [])
 
@@ -183,41 +190,34 @@ and read_normal e =
     match Enum.peek e with
       None | Some (_, _, true) -> return ()
     | Some (_, l, _) -> match l.[0] with
-            '!' | '*' | '#' | '>' when snd_is_space l -> return ()
+            '#' | '>' when snd_is_space l -> return ()
+          | c when is_ul_char c && snd_is_space l -> return ()
           | '{' when snd_is l '{' -> return ()
+          | _ when is_list_nth l -> return ()
           | _ -> Enum.junk e; gettxt (l :: ls) in
   let txt = gettxt [] in
     Some (Normal (parse_text txt))
 
 and parse_text s =
-  scan
-    s
-    { max = String.length s;
-      fragments = [];
-      current = new_fragment (); }
-    0
+  scan s { max = String.length s; fragments = []; current = new_fragment (); } 0
 
   (* scan s starting from n, upto max (exclusive) *)
 and scan s st n =
   let max = st.max in
+  let delim f d s st n =
+    delimited (fun fst lst -> f (unescape_slice s fst lst)) d s st n in
   if n >= max then List.rev (push_current st)
 
   else match s.[n] with
-    | '`' ->
-        delimited (fun ~first ~last -> Code (unescape_slice s ~first ~last)) "`"
-          s st n
-    | '*' ->
-        delimited (fun ~first ~last -> Bold (unescape_slice s ~first ~last)) "*"
-          s st n
-    | '_' ->
-        delimited (fun ~first ~last -> Emph (unescape_slice s ~first ~last)) "__"
-          s st n
+    | '`' -> delim (fun s -> Code s) "`" s st n
+    | '*' when n + 1 < max && s.[n+1] = '*' -> delim (fun s -> Bold s) "**" s st n
+    | '_' when n + 1 < max && s.[n+1] = '_' -> delim (fun s -> Bold s) "__" s st n
+    | '*' | '_' as d -> delim (fun s -> Emph s) (String.make 1 d) s st n
     | '=' ->
         delimited
-          (fun ~first ~last ->
+          (fun fst lst ->
              Struck (scan s
-                       { max = last; fragments = []; current = new_fragment (); }
-                       first))
+                       { max = lst; fragments = []; current = new_fragment (); } fst))
           "==" s st n
     | '!' when matches_at s ~max n "![" ->
         maybe_link
@@ -237,17 +237,15 @@ and scan s st n =
 (* [delimited f delim first] tries to match [delim] starting from [first],
  * returns Some (offset of char after closing delim) or None *)
 and delimited f delim s st first =
-  let max = st.max in
   let delim_len = String.length delim in
   let scan_from_next_char () =
     addc st.current s.[first];
     scan s st (first + 1)
   in
-    if not (matches_at s ~max first delim) then scan_from_next_char ()
-    else match scan_past ~delim s ~max (first + String.length delim) with
+    if not (matches_at s ~max:st.max first delim) then scan_from_next_char ()
+    else match scan_past ~delim s ~max:st.max (first + String.length delim) with
         Some n ->
-          let chunk = f ~first:(first + delim_len)
-                        ~last:(n - String.length delim)
+          let chunk = f (first + delim_len) (n - String.length delim)
           in scan s
                { st with fragments = chunk :: push_current st;
                          current = new_fragment () }
