@@ -64,6 +64,7 @@ let unescape_slice s ~first ~last =
 let snd_is_space s = String.length s > 1 && s.[1] = ' '
 let ulist_re = Str.regexp "^[*+-]+[ ]+"
 let olist_re = Str.regexp "^[0-9]+\\.[ ]+"
+let hlevel = function '=' -> 1 | '-' -> 2 | _ -> invalid_arg "hlevel"
 
 let matches_re re s = Str.string_match re s 0
 let match_end re s = if matches_re re s then Some (Str.match_end ()) else None
@@ -116,7 +117,15 @@ and read_nonempty ~prev indent e s = match s.[0] with
   | '>' when snd_is_space s || s = ">" ->
       (* last check needed because "> " becomes ">" *)
       Enum.push e (indent, s, false); read_quote indent e
-  | _ -> Enum.push e (indent, s, false); read_normal prev e
+  | _ -> match Enum.peek e with
+      | Some (_, l, _) when is_all l '=' || is_all l '-' ->
+          Enum.junk e; Some (Heading (hlevel l.[0], parse_text s))
+      | _ -> Enum.push e (indent, s, false); read_normal prev e
+
+and is_all s c =
+  let rec loop s c n max =
+    if n >= max then true else if c = s.[n] then loop s c (n + 1) max else false
+  in String.length s > 0 && loop s c 0 (String.length s)
 
 and read_heading s =
   let s' = String.strip ~chars:"#" s in
