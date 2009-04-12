@@ -23,7 +23,7 @@ let test_read_list () =
     "* foo\nbar \n   baz\n* baz";
   check
     [Ulist ([Normal [Text "foo"]; Normal [Text "bar"]], [[Normal [Text "baz"]]])]
-    "* foo\n\n bar\n* baz";
+    "* foo\n\n  bar\n* baz";
   check
     [Ulist ([Normal [Text "foo"]], [])]
     "* foo";
@@ -67,7 +67,14 @@ let test_read_list () =
   check
     [Ulist ([Normal [Text "foo "; Bold "bar baz"]; Normal [Text "xxx"]],
             [[Normal [Text "baz"]]])]
-    "*\tfoo\n**bar\n baz**\n\n xxx\n\n* baz";
+    "
+*	foo
+	**bar
+	baz**
+
+	xxx
+
+* baz";
   check
     [Normal [Text "foo"]; Ulist ([Normal [Text "bar"]], [])]
     "foo\n*\tbar";
