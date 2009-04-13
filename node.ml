@@ -4,12 +4,12 @@ open Printf
 
 module S = Set.Make(String)
 
-type entry = {
+type 'html entry = {
   name : string;
   title : string;
   date : float;
   markup : Simple_markup.paragraph list;
-  mutable html : Simple_markup__html.html_output XHTML.M.elt list option;
+  mutable html : 'html XHTML.M.elt list option;
   deps : string list Lazy.t;
   tags : string list;
   syndicated : bool;

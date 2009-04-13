@@ -4,28 +4,28 @@ open ExtString
 
 module type ENTRY =
 sig
-  type entry
+  type 'a entry
   type sort_criterion
-  val name : entry -> string
-  val tags : entry -> string list
-  val deps : entry -> string list
-  val signal_deps_changed : entry -> unit
+  val name : _ entry -> string
+  val tags : _ entry -> string list
+  val deps : _ entry -> string list
+  val signal_deps_changed : _ entry -> unit
   val compare :
-    ?secondary : sort_criterion list -> sort_criterion -> entry -> entry -> int
+    ?secondary : sort_criterion list -> sort_criterion -> 'a entry -> 'a entry -> int
 end
 
 module type S =
 sig
-  type entry
+  type 'a entry
   type sort_criterion
-  type t
-  val refresh : t -> unit
-  val entries : t -> entry list
+  type 'a t
+  val refresh : _ t -> unit
+  val entries : 'a t -> 'a entry list
   val sorted_entries :
     ?reverse : bool ->
-    ?secondary : sort_criterion list -> sort_criterion -> t -> entry list
-  val get_entry : t -> string -> entry option
-  val has_entry : t -> string -> bool
+    ?secondary : sort_criterion list -> sort_criterion -> 'a t -> 'a entry list
+  val get_entry : 'a t -> string -> 'a entry option
+  val has_entry : _ t -> string -> bool
 end
 
 let compare_by_criteria basic_comparison ?(extra = []) crit =
@@ -44,29 +44,29 @@ let dir_filter_map f dir =
 
 module Make(Entry : sig
               include ENTRY
-              val make : name:string -> file:string -> entry
+              val make : name:string -> file:string -> 'a entry
             end)
 : sig
-  include S with type entry = Entry.entry
+  include S with type 'a entry = 'a Entry.entry
              and type sort_criterion = Entry.sort_criterion
-  val make : string -> t
+  val make : string -> 'a t
 end =
 struct
   module M = Map.Make(String)
   module S = Set.Make(String)
 
-  type entry = Entry.entry
+  type 'a entry = 'a Entry.entry
   type sort_criterion = Entry.sort_criterion
 
-  type t = {
+  type 'a t = {
     basedir : string;
-    mutable entries : entry_info M.t;
+    mutable entries : 'a entry_info M.t;
   }
 
-  and entry_info = {
+  and 'a entry_info = {
     e_time : float;
     e_name : string;
-    e_data : entry;
+    e_data : 'a entry;
   }
 
   let (/^) = Filename.concat

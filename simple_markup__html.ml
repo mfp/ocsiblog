@@ -3,11 +3,6 @@
 open Simple_markup
 open XHTML.M
 
-type html_output =
-    [`Address | `Blockquote | `Del | `Div | `Dl | `Fieldset
-     | `Form | `H1 | `H2 | `H3 | `H4 | `H5 | `H6 | `Hr | `Ins
-     | `Noscript | `Ol | `P | `Pre | `Script | `Table | `Ul ]
-
 let rec elm_to_html ~render_pre ~render_link ~render_img elm =
   let self = elm_to_html ~render_pre ~render_link ~render_img in
   let item l = li (List.map self l)
@@ -50,6 +45,5 @@ and text_to_html ~render_link ~render_img = function
     end
   | Image href -> render_img href
 
-let to_html ~render_pre ~render_link ~render_img l :
-      [> html_output] XHTML.M.elt list =
+let to_html ~render_pre ~render_link ~render_img l =
   List.map (elm_to_html ~render_pre ~render_link ~render_img) l
